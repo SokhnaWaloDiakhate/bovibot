@@ -158,7 +158,6 @@ BEGIN
 END$$
 
 -- Procédure : déclarer une vente
--- CORRECTION : DECLARE déplacé en tout début du BEGIN (règle MySQL/MariaDB)
 CREATE PROCEDURE sp_declarer_vente(
     IN p_animal_id   INT,
     IN p_acheteur    VARCHAR(150),
@@ -260,8 +259,6 @@ END$$
 DELIMITER ;
 
 -- ─── EVENTS ──────────────────────────────────────────────────
--- NOTE : SET GLOBAL event_scheduler = ON est géré par AlwaysData.
--- Si refusé, contacter le support AlwaysData ou utiliser un scheduler Python.
 
 DELIMITER $$
 
