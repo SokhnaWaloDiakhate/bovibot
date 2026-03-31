@@ -1,12 +1,12 @@
 # MLD — BoviBot (Modèle Logique de Données)
-**ESP/UCAD — DIC2 2025 | Sokhna Walo Diakhate**
+
 
 ---
 
 ## Conventions
 - **PK** = Clé primaire
 - **FK** = Clé étrangère
-- _italique_ = attribut optionnel (NULL)
+
 
 ---
 
