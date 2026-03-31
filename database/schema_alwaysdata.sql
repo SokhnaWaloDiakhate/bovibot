@@ -1,11 +1,6 @@
 -- ============================================================
 --  BoviBot — Base de données MySQL + PL/SQL
 --  Projet L3 — ESP/UCAD
---  Version adaptée pour AlwaysData (bovibot_db)
---  CORRECTIONS :
---    1. Suppression CREATE DATABASE / USE (déjà sélectionnée dans phpMyAdmin)
---    2. DECLARE déplacé en tête du BEGIN dans sp_declarer_vente
---    3. SET GLOBAL event_scheduler commenté (géré par AlwaysData)
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
