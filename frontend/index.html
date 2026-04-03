@@ -7,6 +7,64 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+    .chart-panel {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .chart-panel .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .chart-panel .panel-header h2 {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .period-toggle {
+      display: flex;
+      background: #F0EDE6;
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .period-btn {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      font-family: var(--font-body);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all 0.15s;
+    }
+    .period-btn.active {
+      background: #fff;
+      color: var(--text-primary);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .chart-container  { position: relative; height: 220px; }
+    .donut-container  { position: relative; height: 190px; }
+    .donut-legend     { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .legend-item      { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+    .legend-left      { display: flex; align-items: center; gap: 8px; }
+    .legend-dot       { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-val       { font-weight: 700; color: var(--text-primary); }
+    @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
 
@@ -17,21 +75,21 @@
       <span class="logo-text">Bovi<strong>Bot</strong></span>
     </div>
     <nav class="sidebar-nav">
-      <a href="index.html" class="nav-item active" data-page="dashboard">
+      <a href="index.html" class="nav-item active">
         <span class="nav-icon">⊞</span> Dashboard
       </a>
-      <a href="#" class="nav-item" data-page="chat">
+      <a href="pages/chat.html" class="nav-item">
         <span class="nav-icon">💬</span> Assistant IA
       </a>
-      <a href="pages/animaux.html" class="nav-item" data-page="animaux">
+      <a href="pages/animaux.html" class="nav-item">
         <span class="nav-icon">🐃</span> Animaux
       </a>
-      <a href="pages/gestations.html" class="nav-item" data-page="gestations">
+      <a href="pages/gestations.html" class="nav-item">
         <span class="nav-icon">🍼</span> Gestations
       </a>
-      <a href="#" class="nav-item" data-page="alertes">
+      <a href="pages/alertes.html" class="nav-item">
         <span class="nav-icon">🔔</span> Alertes
-        <span class="badge" id="badge-alertes">3</span>
+        <span class="badge" id="badge-alertes">5</span>
       </a>
     </nav>
     <div class="sidebar-footer">
@@ -45,10 +103,9 @@
     </div>
   </aside>
 
-  <!-- MAIN CONTENT -->
+  <!-- MAIN -->
   <main class="main">
 
-    <!-- TOP BAR -->
     <header class="topbar">
       <div class="topbar-left">
         <h1 class="page-title">Tableau de bord</h1>
@@ -63,7 +120,7 @@
 
     <!-- STATS CARDS -->
     <section class="stats-grid">
-      <div class="stat-card" style="--accent: #4CAF82">
+      <div class="stat-card" style="--accent:#4CAF82">
         <div class="stat-icon">🐄</div>
         <div class="stat-body">
           <div class="stat-value" id="stat-animaux">--</div>
@@ -71,7 +128,7 @@
         </div>
         <div class="stat-trend up">+2 ce mois</div>
       </div>
-      <div class="stat-card" style="--accent: #F0A030">
+      <div class="stat-card" style="--accent:#F0A030">
         <div class="stat-icon">⚖️</div>
         <div class="stat-body">
           <div class="stat-value" id="stat-gmq">--</div>
@@ -79,7 +136,7 @@
         </div>
         <div class="stat-trend up">↑ bonne croissance</div>
       </div>
-      <div class="stat-card" style="--accent: #E05C5C">
+      <div class="stat-card" style="--accent:#E05C5C">
         <div class="stat-icon">🔔</div>
         <div class="stat-body">
           <div class="stat-value" id="stat-alertes">--</div>
@@ -87,7 +144,7 @@
         </div>
         <div class="stat-trend down">2 critiques</div>
       </div>
-      <div class="stat-card" style="--accent: #7B6CF6">
+      <div class="stat-card" style="--accent:#7B6CF6">
         <div class="stat-icon">🍼</div>
         <div class="stat-body">
           <div class="stat-value" id="stat-velages">--</div>
@@ -97,21 +154,46 @@
       </div>
     </section>
 
+    <!-- GRAPHIQUES -->
+    <div class="charts-grid">
+
+      <div class="chart-panel">
+        <div class="panel-header">
+          <h2>📈 Évolution du GMQ — troupeau</h2>
+          <div class="period-toggle">
+            <button class="period-btn active" onclick="changerPeriode('7j', this)">7j</button>
+            <button class="period-btn" onclick="changerPeriode('1m', this)">1 mois</button>
+            <button class="period-btn" onclick="changerPeriode('3m', this)">3 mois</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-gmq"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="panel-header">
+          <h2>🐄 Races du troupeau</h2>
+        </div>
+        <div class="donut-container">
+          <canvas id="chart-races"></canvas>
+        </div>
+        <div class="donut-legend" id="donut-legend"></div>
+      </div>
+
+    </div>
+
     <!-- BOTTOM GRID -->
     <div class="bottom-grid">
 
-      <!-- ALERTES RÉCENTES -->
       <section class="panel panel-alertes">
         <div class="panel-header">
           <h2>Alertes récentes</h2>
-          <a href="#" class="panel-link">Voir tout →</a>
+          <a href="pages/alertes.html" class="panel-link">Voir tout →</a>
         </div>
-        <div class="alertes-list" id="alertes-list">
-          <!-- Injectées par dashboard.js -->
-        </div>
+        <div class="alertes-list" id="alertes-list"></div>
       </section>
 
-      <!-- CHAT RAPIDE -->
       <section class="panel panel-chat">
         <div class="panel-header">
           <h2>💬 Assistant BoviBot</h2>
@@ -129,7 +211,6 @@
         </div>
       </section>
 
-      <!-- ANIMAUX RÉCENTS -->
       <section class="panel panel-table">
         <div class="panel-header">
           <h2>Animaux — aperçu</h2>
@@ -138,17 +219,11 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Tag</th>
-              <th>Race</th>
-              <th>Sexe</th>
-              <th>Âge</th>
-              <th>GMQ</th>
-              <th>Statut</th>
+              <th>Tag</th><th>Race</th><th>Sexe</th>
+              <th>Âge</th><th>GMQ</th><th>Statut</th>
             </tr>
           </thead>
-          <tbody id="animaux-tbody">
-            <!-- Injectés par dashboard.js -->
-          </tbody>
+          <tbody id="animaux-tbody"></tbody>
         </table>
       </section>
 
@@ -157,5 +232,6 @@
 
   <script src="js/dashboard.js"></script>
   <script src="js/chat.js"></script>
+  <script src="js/charts.js"></script>
 </body>
 </html>
