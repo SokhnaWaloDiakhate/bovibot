@@ -345,7 +345,7 @@
     //  DONNÉES MOCK
     //  (remplacer par fetch(`${API_URL}/alertes`) quand backend prêt)
     // =============================================
-    const USE_MOCK = true;
+    const USE_MOCK = false;
     const API_URL  = "http://localhost:8002";
 
     let alertes = [
@@ -462,20 +462,20 @@
     // =============================================
     //  ACTIONS
     // =============================================
-    function traiter(id) {
-      const a = alertes.find(x => x.id === id);
-      if (!a) return;
-      a.traitee = true;
-
-      // Animation de sortie
-      const card = document.getElementById(`alerte-${id}`);
-      if (card) {
-        card.style.transition = "opacity 0.4s, transform 0.4s";
-        card.style.opacity = "0";
-        card.style.transform = "translateX(20px)";
-        setTimeout(() => afficher(), 400);
-      }
-    }
+ async function traiter(id) {
+  try {
+    await fetch(`${API_URL}/alertes/${id}/traiter`, { method: "POST" });
+  } catch { }
+  const a = alertes.find(x => x.id === id);
+  if (a) a.traitee = true;
+  const card = document.getElementById(`alerte-${id}`);
+  if (card) {
+    card.style.transition = "opacity 0.4s, transform 0.4s";
+    card.style.opacity = "0";
+    card.style.transform = "translateX(20px)";
+    setTimeout(() => afficher(), 400);
+  }
+}
 
     function supprimer(id) {
       const card = document.getElementById(`alerte-${id}`);
@@ -539,7 +539,23 @@
       weekday: "long", year: "numeric", month: "long", day: "numeric"
     });
 
-    afficher();
+    // Charger depuis l'API au démarrage
+async function init() {
+  try {
+    const r = await fetch(`${API_URL}/alertes`, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const ICONES = { poids_faible:"🚨", vaccination:"💉", velage:"🍼", rapport:"📊", statut:"🔄" };
+    alertes = data.map(a => ({
+      id: a.id, niveau: a.niveau || "info", type: a.type || "info",
+      icon: ICONES[a.type] || "🔔", message: a.message,
+      animal: a.animal_id ? `Animal #${a.animal_id}` : null,
+      date: a.date_creation || new Date().toISOString(),
+      source: a.type || "système", traitee: false
+    }));
+  } catch { /* garde les données mock */ }
+  afficher();
+}
   </script>
 
 </body>
