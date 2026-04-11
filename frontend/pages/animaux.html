@@ -78,20 +78,21 @@
   <script>
     document.getElementById("today-date").textContent = new Date().toLocaleDateString("fr-FR", {weekday:"long",year:"numeric",month:"long",day:"numeric"});
 
-    const animaux = [
-      { tag:"TAG-001", nom:"Baaba",  race:"Zébu Gobra", sexe:"M", age:"18 mois", poids:"325 kg", gmq:0.52, statut:"actif" },
-      { tag:"TAG-002", nom:"Fatou",  race:"Ndama",      sexe:"F", age:"24 mois", poids:"280 kg", gmq:0.45, statut:"actif" },
-      { tag:"TAG-003", nom:"Rama",   race:"Zébu Gobra", sexe:"F", age:"36 mois", poids:"410 kg", gmq:0.60, statut:"actif" },
-      { tag:"TAG-004", nom:"Samba",  race:"Métis",      sexe:"M", age:"10 mois", poids:"145 kg", gmq:0.48, statut:"actif" },
-      { tag:"TAG-005", nom:"Aïda",   race:"Ndama",      sexe:"F", age:"48 mois", poids:"350 kg", gmq:0.35, statut:"vendu" },
-      { tag:"TAG-006", nom:"Modou",  race:"Zébu Gobra", sexe:"M", age:"8 mois",  poids:"88 kg",  gmq:0.18, statut:"malade" },
-      { tag:"TAG-007", nom:"Dior",   race:"Ndama",      sexe:"F", age:"4 mois",  poids:"52 kg",  gmq:0.25, statut:"malade" },
-      { tag:"TAG-008", nom:"Lamine", race:"Métis",      sexe:"M", age:"20 mois", poids:"295 kg", gmq:0.51, statut:"actif" },
-      { tag:"TAG-012", nom:"Khadija",race:"Métis",      sexe:"F", age:"30 mois", poids:"310 kg", gmq:0.38, statut:"actif" },
-      { tag:"TAG-019", nom:"Omar",   race:"Zébu Gobra", sexe:"M", age:"12 mois", poids:"190 kg", gmq:0.41, statut:"malade" },
-    ];
-
+    let animaux = [];
     let filtreActif = "tous";
+
+    // URL du backend (ajuste si nécessaire)
+    const API_URL = "http://127.0.0.1:8000/api/animaux";
+
+    async function chargerAnimaux() {
+      try {
+        const res = await fetch(API_URL);
+        animaux = await res.json();
+        afficher();
+      } catch (err) {
+        console.error("Erreur chargement animaux:", err);
+      }
+    }
 
     function setFiltre(val, btn) {
       filtreActif = val;
@@ -109,25 +110,26 @@
 
       animaux
         .filter(a => filtreActif === "tous" || a.statut === filtreActif)
-        .filter(a => a.tag.toLowerCase().includes(search) || a.race.toLowerCase().includes(search) || a.nom.toLowerCase().includes(search))
+        .filter(a => (a.tag||"").toLowerCase().includes(search) || (a.nom||"").toLowerCase().includes(search))
         .forEach(a => {
-          const gmqStyle = a.gmq < 0.3 ? "color:#E05C5C;font-weight:700" : "";
+          const gmqVal = parseFloat(a.gmq || 0).toFixed(2);
+          const gmqStyle = gmqVal < 0.3 ? "color:#E05C5C;font-weight:700" : "";
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td><span class="tag-pill">${a.tag}</span></td>
-            <td>${a.nom}</td>
+            <td>${a.nom || "?"}</td>
             <td>${a.race}</td>
             <td>${a.sexe === "M" ? "♂ Mâle" : "♀ Femelle"}</td>
-            <td>${a.age}</td>
-            <td>${a.poids}</td>
-            <td style="${gmqStyle}">${a.gmq} kg/j</td>
+            <td>${a.age_mois} mois</td>
+            <td>${a.poids_actuel} kg</td>
+            <td style="${gmqStyle}">${gmqVal} kg/j</td>
             <td><span class="statut-badge ${a.statut}">${a.statut}</span></td>
           `;
           tbody.appendChild(tr);
         });
     }
 
-    afficher();
+    chargerAnimaux();
   </script>
 </body>
 </html>

@@ -7,6 +7,8 @@ from database import engine, Base, get_db
 import models
 from pydantic import BaseModel
 import os
+from datetime import datetime
+import json
 
 # Créer les tables si elles n'existent pas encore
 try:
@@ -14,16 +16,29 @@ try:
 except Exception as e:
     print(f"Erreur lors de la création des tables : {e}")
 
+from groq import Groq
+
 # Initialisation de l'application FastAPI
 app = FastAPI(title="Bovibot API", version="1.0.0")
 
+# Initialisation du client Groq
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 # Pydantic models for request/response
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
 class ChatRequest(BaseModel):
     message: str
-    mode: str
+    history: list[ChatMessage] = []
+    pending_sql: str | None = None # Stocke la requête en attente de confirmation
 
 class ChatResponse(BaseModel):
     response: str
+    sql: str | None = None
+    results: list | None = None
+    pending_sql: str | None = None
 
 # Chemin vers le dossier frontend
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
@@ -117,18 +132,127 @@ def get_stats(db: Session = Depends(get_db)):
     }
 
 @app.post("/chat")
-def chat(request: ChatRequest):
-    """Reçoit un message et retourne la réponse du LLM"""
-    # TODO: Intégrer un vrai LLM (OpenAI, local, etc.)
-    # Pour l'instant, réponse simple basée sur le mode
-    if request.mode == "diagnostic":
-        response = f"Diagnostic pour: {request.message}"
-    elif request.mode == "conseil":
-        response = f"Conseil: {request.message}"
-    else:
-        response = f"Réponse à: {request.message}"
+def chat(request: ChatRequest, db: Session = Depends(get_db)):
+    try:
+        # Context DB
+        db_anim = db.execute(text("SELECT id, numero_tag, nom, statut FROM animaux")).fetchall()
+        liste_animaux = "\n".join([f"ID:{r[0]} | Tag:{r[1]} | Nom:{r[2]} | Statut:{r[3]}" for r in db_anim])
+        
+        db_races = db.execute(text("SELECT id, nom FROM races")).fetchall()
+        liste_races = "\n".join([f"ID:{r[0]} | Nom:{r[1]}" for r in db_races])
 
-    return ChatResponse(response=response)
+        sql_query = None
+        results_final = None
+        tool_result = "Aucune donnée trouvée."
+        pending_sql = None
+
+        # CAS A : L'utilisateur confirme une action précédente
+        msg_clean = request.message.lower().strip()
+        is_confirmation = msg_clean in ["oui", "yes", "confirmer", "ok", "c'est bon", "vas-y", "valider"]
+        
+        if request.pending_sql and is_confirmation:
+            sql_query = request.pending_sql
+            print(f"DEBUG: EXECUTION CONFIRMÉE -> {sql_query}")
+        
+        # CAS B : Nouvelle demande
+        else:
+            messages_sql = [{"role": m.role, "content": m.content} for m in request.history[-5:]]
+            prompt_sql = f"""Tu es l'expert SQL de BoviBot.
+QUESTION : {request.message}
+
+TABLES :
+- animaux (id, numero_tag, nom, poids_actuel, statut)
+- sante (animal_id, type ['vaccination'], date_acte)
+- reproduction (mere_id, pere_id, date_saillie, date_velage_prevue, statut ['en_gestation','vele'])
+
+RÈGLES :
+1. 'fn_gmq(id)' retourne DIRECTEMENT le GMQ. N'invente PAS de formule mathématique.
+2. 'fn_age_en_mois(id)' retourne l'âge.
+3. Si l'animal n'est pas dans la LISTE ci-dessous, dis que tu ne le connais pas.
+4. N'utilise INSERT que si l'utilisateur dit "AJOUTER".
+
+LISTE ANIMAUX : {liste_animaux}
+RÉPONDS EN JSON : {{"sql": "la requête"}}"""
+            
+            messages_sql.append({"role": "user", "content": prompt_sql})
+            resp_sql = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages_sql,
+                response_format={"type": "json_object"}
+            )
+            sql_query = json.loads(resp_sql.choices[0].message.content).get("sql")
+
+            # SI ACTION -> On attend confirmation (SAUF si c'est déjà une confirmation, ce qui est géré au-dessus)
+            if sql_query and any(x in sql_query.upper() for x in ["CALL", "INSERT", "UPDATE", "DELETE"]):
+                pending_sql = sql_query
+                sql_query = None 
+                tool_result = "EN ATTENTE DE CONFIRMATION"
+
+        # ÉTAPE 2 : Exécution
+        if sql_query:
+            try:
+                query_result = db.execute(text(sql_query))
+                if sql_query.strip().upper().startswith("SELECT"):
+                    rows = query_result.fetchall()
+                    keys = query_result.keys()
+                    results_final = [dict(zip(keys, row)) for row in rows]
+                    for d in results_final:
+                        for k, v in d.items():
+                            if hasattr(v, '__float__') and not isinstance(v, (int, float)):
+                                d[k] = float(v)
+                    tool_result = json.dumps(results_final, default=str)
+                else:
+                    db.commit()
+                    tool_result = "Action enregistrée avec succès."
+            except Exception as e:
+                db.rollback()
+                tool_result = f"Erreur SQL : {str(e)}"
+
+        # ÉTAPE 3 : Réponse finale
+        messages_final = [{"role": m.role, "content": m.content} for m in request.history[-5:]]
+        if pending_sql:
+            p_final = f"""L'utilisateur veut une action : {request.message}. 
+            Demande confirmation courte (ex: 'Confirmer la vente de X ?'). 
+            PAS DE CONSEILS, PAS DE BAVARDAGE."""
+        else:
+            p_final = f"""Tu es BoviBot, assistant de ferme.
+            DONNÉES SQL : {tool_result}
+            RÈGLE : 1. Réponds UNIQUEMENT sur la base des données fournies. 
+            2. INTERDICTION de donner des conseils (collecter données, etc.).
+            3. Si vide : 'Aucun animal trouvé'. 
+            4. Sois très bref."""
+
+        messages_final.append({"role": "user", "content": p_final})
+        resp_final = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages_final
+        )
+        
+        return ChatResponse(
+            response=resp_final.choices[0].message.content,
+            sql=sql_query or pending_sql,
+            results=results_final,
+            pending_sql=pending_sql
+        )
+
+    except Exception as e:
+        print(f"Erreur globale: {e}")
+        return ChatResponse(response="Désolé, une erreur est survenue.")
+
+@app.get("/api/animaux")
+def get_animaux_list(db: Session = Depends(get_db)):
+    # On récupère tous les animaux avec leur race et GMQ calculé
+    query = text("""
+        SELECT a.numero_tag as tag, a.nom, r.nom as race, a.sexe, 
+               fn_age_en_mois(a.id) as age_mois, a.poids_actuel, 
+               fn_gmq(a.id) as gmq, a.statut
+        FROM animaux a
+        JOIN races r ON a.race_id = r.id
+    """)
+    result = db.execute(query)
+    columns = result.keys()
+    animaux = [dict(zip(columns, row)) for row in result.fetchall()]
+    return animaux
 
 @app.get("/reproduction")
 def get_reproduction(db: Session = Depends(get_db)):
