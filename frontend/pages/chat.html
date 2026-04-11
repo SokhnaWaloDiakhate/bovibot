@@ -304,6 +304,34 @@
       background: #F0FAF5;
     }
 
+    /* Table styles for AI results */
+    .result-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      font-size: 0.85rem;
+    }
+    .result-table th {
+      background: #f8f9fa;
+      color: #333;
+      font-weight: 600;
+      padding: 10px;
+      text-align: left;
+      border-bottom: 2px solid #eee;
+      white-space: nowrap;
+    }
+    .result-table td {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      color: #555;
+      white-space: nowrap;
+    }
+    .result-table tr:hover { background: #fcfcfc; }
+
     /* Zone saisie */
     .chat-footer {
       padding: 16px 24px;
@@ -492,8 +520,8 @@
     // =============================================
     //  CONFIGURATION
     // =============================================
-    const USE_MOCK = true;  // ← mettre false quand Mame Diarra a pushé le backend
-    const API_URL  = "http://localhost:8002";
+    const USE_MOCK = false;  // ON PASSE EN RELATION AVEC LE BACKEND
+    const API_URL  = "";
 
     let modeActif = "consultation";
     let conversations = [];  // historique de la conv actuelle
@@ -593,10 +621,6 @@
 
       let contenuExtra = "";
 
-      if (reponse.sql) {
-        contenuExtra += `<div class="sql-block">-- SQL généré\n${reponse.sql}</div>`;
-      }
-
       if (reponse.tableau) {
         contenuExtra += genererTableau(reponse.tableau);
       }
@@ -613,14 +637,11 @@
           </div>`;
       }
 
-      const badgeMode = `<span class="mode-badge ${reponse.mode}">${reponse.mode === "consultation" ? "🔍 Consultation" : "⚡ Action"}</span>`;
-
       row.innerHTML = `
         <div class="msg-avatar-sm">🤖</div>
         <div class="msg-content" style="max-width:85%">
           <span class="msg-sender">BoviBot</span>
           <div class="msg-bubble">
-            ${badgeMode}<br>
             ${reponse.texte}
             ${contenuExtra}
           </div>
@@ -633,12 +654,30 @@
 
     function genererTableau(data) {
       if (!data || !data.length) return "";
+      
+      // Mapping des noms techniques vers des noms lisibles
+      const labels = {
+        "numero_tag": "Tag",
+        "nom": "Nom",
+        "sexe": "Sexe",
+        "poids_actuel": "Poids (kg)",
+        "statut": "Statut",
+        "date_naissance": "Naissance",
+        "age_mois": "Âge (mois)",
+        "gmq": "GMQ"
+      };
+
       const headers = Object.keys(data[0]);
-      const ths = headers.map(h => `<th>${h}</th>`).join("");
+      const ths = headers.map(h => `<th>${labels[h] || h}</th>`).join("");
       const trs = data.map(row =>
-        `<tr>${headers.map(h => `<td>${row[h]}</td>`).join("")}</tr>`
+        `<tr>${headers.map(h => {
+          let val = row[h];
+          if (val === null || val === undefined) val = "-";
+          return `<td>${val}</td>`;
+        }).join("")}</tr>`
       ).join("");
-      return `<table class="result-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+      
+      return `<div style="overflow-x:auto"><table class="result-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
     }
 
     // =============================================

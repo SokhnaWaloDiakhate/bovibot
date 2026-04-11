@@ -5,7 +5,7 @@
 // =============================================
 
 // URL du backend (à changer quand Mame Diarra aura lancé FastAPI)
-const API_URL = "http://localhost:8002";
+const API_URL = "";
 
 // ---- DATE DU JOUR ----
 document.getElementById("today-date").textContent = new Date().toLocaleDateString("fr-FR", {
