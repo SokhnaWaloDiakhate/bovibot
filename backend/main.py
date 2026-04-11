@@ -161,15 +161,17 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
 QUESTION : {request.message}
 
 TABLES :
-- animaux (id, numero_tag, nom, poids_actuel, statut)
-- sante (animal_id, type ['vaccination'], date_acte)
-- reproduction (mere_id, pere_id, date_saillie, date_velage_prevue, statut ['en_gestation','vele'])
+- animaux (id, numero_tag, nom, poids_actuel, statut ['actif','vendu'])
+- ventes (animal_id, acheteur, date_vente, prix_fcfa, poids_vente_kg)
+- pesees (animal_id, poids_kg, date_pesee)
+- sante (animal_id, type, date_acte)
+- reproduction (mere_id, statut ['en_gestation','vele'])
 
 RÈGLES :
-1. 'fn_gmq(id)' retourne DIRECTEMENT le GMQ. N'invente PAS de formule mathématique.
-2. 'fn_age_en_mois(id)' retourne l'âge.
-3. Si l'animal n'est pas dans la LISTE ci-dessous, dis que tu ne le connais pas.
-4. N'utilise INSERT que si l'utilisateur dit "AJOUTER".
+1. VENTES : Pour le total, utilise SUM(prix_fcfa) FROM ventes.
+2. CROISSANCE : utilise la fonction fn_gmq(id).
+3. ACTIONS : Pour peser, utilise CALL sp_enregistrer_pesee(...). Pour vendre, CALL sp_declarer_vente(...).
+4. Si l'animal n'est pas dans la LISTE ci-dessous, dis que tu ne le connais pas.
 
 LISTE ANIMAUX : {liste_animaux}
 RÉPONDS EN JSON : {{"sql": "la requête"}}"""
