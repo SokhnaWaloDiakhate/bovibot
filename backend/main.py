@@ -1,9 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from database import engine, Base, get_db
 import models
 from pydantic import BaseModel
+import os
 
 # Créer les tables si elles n'existent pas encore
 try:
@@ -22,10 +25,13 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
 
+# Chemin vers le dossier frontend
+frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+
 @app.get("/")
 def read_root():
-    """ Point d'entrée principal. """
-    return {"message": "Bienvenue sur l'API de Bovibot", "status": "en cours d'exécution"}
+    """ Sert la page d'accueil du frontend. """
+    return FileResponse(os.path.join(frontend_path, "index.html"))
 
 @app.get("/animaux")
 def get_animaux(db: Session = Depends(get_db)):
@@ -141,6 +147,9 @@ def get_reproduction(db: Session = Depends(get_db)):
         })
 
     return result
+
+# Monter le dossier frontend pour servir le CSS, JS et les images
+app.mount("/", StaticFiles(directory=frontend_path), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
