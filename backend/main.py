@@ -146,53 +146,94 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         tool_result = "Aucune donnée trouvée."
         pending_sql = None
 
-        # CAS A : L'utilisateur confirme une action précédente
-        msg_clean = request.message.lower().strip()
-        is_confirmation = msg_clean in ["oui", "yes", "confirmer", "ok", "c'est bon", "vas-y", "valider"]
+        # --- DIAGNOSTIC ---
+        print(f"\n[RECEIVE] Message: '{request.message}' | Pending: {bool(request.pending_sql)}")
         
-        if request.pending_sql and is_confirmation:
+        # Logique de confirmation automatique
+        is_confirmed = False
+        msg_lower = request.message.lower().strip()
+        
+        # Liste étendue de confirmations
+        confirm_words = ["oui", "ok", "vas-y", "confirme", "go", "c'est bon", "valider", "yes", "ouais", "affirmatif"]
+
+        # Si on a une requête en attente ET que l'utilisateur confirme
+        if request.pending_sql and any(x in msg_lower for x in confirm_words):
+            is_confirmed = True
             sql_query = request.pending_sql
-            print(f"DEBUG: EXECUTION CONFIRMÉE -> {sql_query}")
-        
-        # CAS B : Nouvelle demande
-        else:
-            messages_sql = [{"role": m.role, "content": m.content} for m in request.history[-5:]]
-            prompt_sql = f"""Tu es l'expert SQL de BoviBot.
-QUESTION : {request.message}
+            print(f"--- !!! CONFIRMATION DÉTECTÉE !!! Exécution de : {sql_query}")
+        elif request.pending_sql and any(x in msg_lower for x in ["non", "annule", "stop", "négatif"]):
+            print("--- ANNULATION DÉTECTÉE ---")
+            return ChatResponse(response="Action annulée.", sql=None, results=None, pending_sql=None)
 
-TABLES :
-- animaux (id, numero_tag, nom, poids_actuel, statut ['actif','vendu'])
-- ventes (animal_id, acheteur, date_vente, prix_fcfa, poids_vente_kg)
-- pesees (animal_id, poids_kg, date_pesee)
-- sante (animal_id, type, date_acte)
-- reproduction (mere_id, statut ['en_gestation','vele'])
+        if not is_confirmed:
+            # ÉTAPE 1 : Décision (SQL ou Guidage)
+            prompt_sql = f"""Tu es l'expert SQL de BoviBot. Analise la demande de l'utilisateur.
 
-RÈGLES :
-1. VENTES : Pour le total, utilise SUM(prix_fcfa) FROM ventes.
-2. CROISSANCE : utilise la fonction fn_gmq(id).
-3. ACTIONS : Pour peser, utilise CALL sp_enregistrer_pesee(...). Pour vendre, CALL sp_declarer_vente(...).
-4. Si l'animal n'est pas dans la LISTE ci-dessous, dis que tu ne le connais pas.
+CAS 1 : L'UTILISATEUR VEUT VOIR OU SAVOIR (SELECT)
+- Génère immédiatement la requête SQL.
+- Exemple : 'liste des animaux', 'quel âge a Bella ?', 'combien de ventes ?'.
+- Utilise les fonctions fn_age_en_mois(id) et fn_gmq(id).
 
-LISTE ANIMAUX : {liste_animaux}
-RÉPONDS EN JSON : {{"sql": "la requête"}}"""
+CAS 2 : L'UTILISATEUR VEUT AGIR (INSERT, CALL, UPDATE)
+- Vérifie les champs obligatoires :
+  * VENTE : animal_id, acheteur, prix_fcfa. (Utilise CALL sp_declarer_vente(id, acheteur, 'Non renseigné', prix, null, CURDATE()))
+    - ATTENTION : L'acheteur est OBLIGATOIRE. Si l'utilisateur ne donne pas de nom, mets "sql": null et demande : "Quel est le nom de l'acheteur ?".
+
+SCHÉMA SQL RÉEL (Interdiction d'utiliser d'autres tables/colonnes) :
+- animaux (id, numero_tag, nom, race_id, sexe, date_naissance, poids_actuel, statut)
+- races (id, nom, origine)
+- pesees (id, animal_id, poids_kg, date_pesee, agent)
+- alertes (id, animal_id, type, message, niveau)
+- ventes (id, animal_id, acheteur, date_vente, prix_fcfa)
+
+CONSIGNES DE SÉCURITÉ :
+1. SUIVI DU DIALOGUE : Regarde tes questions précédentes. Si l'utilisateur y répond, complète l'action.
+2. VERBES D'ACTION : Pour une PESÉE, utilise CALL sp_enregistrer_pesee(id, poids, CURDATE(), agent). Pour une VENTE, appelle CALL sp_declarer_vente.
+3. PAS DE HALLUCINATION : Si une table ou une colonne n'est pas listée ci-dessus, elle n'existe pas. Ne l'invente jamais.
+- S'il manque une info : mets "sql" à null et demande l'info précise.
+- Si tout est prêt : génère le SQL exact utilisant uniquement le schéma ci-dessus.
+
+EXEMPLES :
+- Utilisateur: "Pèse Diama" -> Assistant: {{"sql": null, "explication": "Quel est le poids de Diama et qui est l'agent ?"}}
+- Utilisateur: "Vend Baaba" -> Assistant: {{"sql": null, "explication": "Quel est le prix de vente et qui est l'acheteur ?"}}
+- Utilisateur: "Vend Baaba à Mame pour 500000" -> Assistant: {{"sql": "CALL sp_declarer_vente(1, 'Mame', ...)", "explication": "Vente de Baaba..."}}
+
+LISTE ANIMAUX POUR RÉFÉRENCE : {liste_animaux}
+
+RÉPONDS EN JSON : {{"sql": "la requête ou null", "explication": "ton message"}}"""
+
+            # On construit l'historique en incluant d'abord les instructions (SYSTEM)
+            messages_sql = [
+                {"role": "system", "content": prompt_sql},
+                *[{"role": m.role, "content": m.content} for m in request.history[-10:]]
+            ]
             
-            messages_sql.append({"role": "user", "content": prompt_sql})
+            print(f"[DEBUG HISTORY] Envoi de {len(messages_sql)} messages (Contexte + Historique) au moteur SQL.")
+
             resp_sql = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=messages_sql,
                 response_format={"type": "json_object"}
             )
-            sql_query = json.loads(resp_sql.choices[0].message.content).get("sql")
+            data_sql = json.loads(resp_sql.choices[0].message.content)
+            print(f"\n[DEBUG IA] Réponse reçue : {data_sql}")
+            sql_query = data_sql.get("sql")
+            explanation = data_sql.get("explication")
 
-            # SI ACTION -> On attend confirmation (SAUF si c'est déjà une confirmation, ce qui est géré au-dessus)
-            if sql_query and any(x in sql_query.upper() for x in ["CALL", "INSERT", "UPDATE", "DELETE"]):
+            # SI ACTION -> On attend confirmation
+            if sql_query and sql_query.lower() != "null" and any(x in sql_query.upper() for x in ["CALL", "INSERT", "UPDATE", "DELETE"]):
                 pending_sql = sql_query
                 sql_query = None 
                 tool_result = "EN ATTENTE DE CONFIRMATION"
+            elif (not sql_query or sql_query.lower() == "null") and explanation:
+                return ChatResponse(response=explanation, history=request.history, pending_sql=None)
+            else:
+                tool_result = "Aucune action générée ou erreur de format."
 
         # ÉTAPE 2 : Exécution
         if sql_query:
             try:
+                print(f"--- EXÉCUTION SQL : {sql_query} ---")
                 query_result = db.execute(text(sql_query))
                 if sql_query.strip().upper().startswith("SELECT"):
                     rows = query_result.fetchall()
@@ -213,22 +254,36 @@ RÉPONDS EN JSON : {{"sql": "la requête"}}"""
         # ÉTAPE 3 : Réponse finale
         messages_final = [{"role": m.role, "content": m.content} for m in request.history[-5:]]
         if pending_sql:
-            p_final = f"""L'utilisateur veut une action : {request.message}. 
-            Demande confirmation courte (ex: 'Confirmer la vente de X ?'). 
-            PAS DE CONSEILS, PAS DE BAVARDAGE."""
+            p_final = f"""L'utilisateur veut effectuer cette action : {explanation}. 
+            Demande une confirmation TRÈS CLAIRE commençant par '⚠️ ACTION EN ATTENTE'. 
+            Répète les détails (nom, prix, etc.) pour être sûr.
+            Explique que rien n'est enregistré tant qu'il ne clique pas sur OUI."""
+            
+            resp_final = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "Tu es BoviBot, gérant de ferme expert. Ton but est l'efficacité absolue. Sois direct et précis."},
+                    {"role": "user", "content": p_final}
+                ]
+            )
         else:
-            p_final = f"""Tu es BoviBot, assistant de ferme.
-            DONNÉES SQL : {tool_result}
-            RÈGLE : 1. Réponds UNIQUEMENT sur la base des données fournies. 
-            2. INTERDICTION de donner des conseils (collecter données, etc.).
-            3. Si vide : 'Aucun animal trouvé'. 
-            4. Sois très bref."""
+            p_final = f"""Tu es BoviBot, gérant de ferme expert et rigoureux. 
+            DONNÉES SQL RÉELLES : {tool_result}
+            
+            CONSIGNES :
+            1. RÉPONSE PROFESSIONNELLE : Résume les données SQL ci-dessus de manière concise. Ne sois pas trop bavard.
+            2. PAS D'INVENTION : Ne devine jamais une information absente du SQL.
+            3. MISSION : Ton rôle est uniquement la gestion du troupeau. Pour tout le reste, réponds : "Je me concentre sur la gestion de BoviBot."
+            4. AUCUN CONSEIL : Ne donne pas de conseils vétérinaires ou de recommandations.
+            5. CONCISION : Sois très bref."""
 
-        messages_final.append({"role": "user", "content": p_final})
-        resp_final = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages_final
-        )
+            messages_final.append({"role": "user", "content": p_final})
+            resp_final = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages_final
+            )
+        
+        print(f"[REPLY] Response: '{resp_final.choices[0].message.content[:50]}...' | Pending: {bool(pending_sql)}")
         
         return ChatResponse(
             response=resp_final.choices[0].message.content,
@@ -238,8 +293,10 @@ RÉPONDS EN JSON : {{"sql": "la requête"}}"""
         )
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Erreur globale: {e}")
-        return ChatResponse(response="Désolé, une erreur est survenue.")
+        return ChatResponse(response=f"Désolé, une erreur est survenue : {str(e)}")
 
 @app.get("/api/animaux")
 def get_animaux_list(db: Session = Depends(get_db)):
@@ -249,12 +306,36 @@ def get_animaux_list(db: Session = Depends(get_db)):
                fn_age_en_mois(a.id) as age_mois, a.poids_actuel, 
                fn_gmq(a.id) as gmq, a.statut
         FROM animaux a
-        JOIN races r ON a.race_id = r.id
+        LEFT JOIN races r ON a.race_id = r.id
     """)
     result = db.execute(query)
     columns = result.keys()
     animaux = [dict(zip(columns, row)) for row in result.fetchall()]
     return animaux
+
+@app.get("/api/stats/races")
+def get_stats_races(db: Session = Depends(get_db)):
+    """Répartition des animaux par race pour le graphique donut"""
+    query = text("""
+        SELECT r.nom as race, COUNT(a.id) as nb
+        FROM animaux a
+        JOIN races r ON a.race_id = r.id
+        WHERE a.statut = 'actif'
+        GROUP BY r.nom
+    """)
+    result = db.execute(query)
+    return [dict(zip(result.keys(), row)) for row in result.fetchall()]
+
+@app.get("/api/stats/gmq_history")
+def get_stats_gmq_history(db: Session = Depends(get_db)):
+    """Historique simplifié du GMQ pour le graphique en ligne"""
+    # Ici on simule une évolution basée sur les dernières pesées réelles
+    # Dans un vrai système, on calculerait par semaine/mois
+    return {
+        "labels": ["Jan", "Feb", "Mar", "Apr"],
+        "troupeau": [0.42, 0.44, 0.46, 0.48], # Ces chiffres devraient être calculés
+        "meilleur": [0.55, 0.58, 0.60, 0.62]
+    }
 
 @app.get("/reproduction")
 def get_reproduction(db: Session = Depends(get_db)):

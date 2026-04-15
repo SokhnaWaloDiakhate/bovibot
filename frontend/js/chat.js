@@ -8,7 +8,8 @@ const chatSend     = document.getElementById("chat-send");
 
 // États en mémoire
 let conversationHistory = [];
-let currentPendingSql   = null;
+let currentPendingSql   = localStorage.getItem('bovibot_pending_sql') || null;
+console.log("Démarrage chat - Pending SQL:", currentPendingSql);
 
 // ---- Ajouter un message au UI et à l'historique ----
 function addMessage(text, role = "bot") {
@@ -73,8 +74,14 @@ async function traiterMessage(texte) {
     if (data.response) {
       addMessage(data.response, "bot");
       
-      // On met à jour (ou on vide) la requête en attente
-      currentPendingSql = data.pending_sql;
+      // On sauvegarde la requête en attente dans le localStorage pour ne pas la perdre
+      if (data.pending_sql) {
+          localStorage.setItem('bovibot_pending_sql', data.pending_sql);
+          currentPendingSql = data.pending_sql;
+      } else {
+          localStorage.removeItem('bovibot_pending_sql');
+          currentPendingSql = null;
+      }
 
       // Si résultats SELECT
       if (data.results && data.results.length > 0) {
