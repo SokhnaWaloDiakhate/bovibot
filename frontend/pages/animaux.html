@@ -81,16 +81,26 @@
     let animaux = [];
     let filtreActif = "tous";
 
-    // URL du backend (ajuste si nécessaire)
-    const API_URL = "http://127.0.0.1:8000/api/animaux";
+    // URL du backend avec cache-busting pour forcer la mise à jour
+    const API_URL = "/api/animaux?v=" + new Date().getTime();
 
     async function chargerAnimaux() {
+      const tbody = document.getElementById("tbody");
+      tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;padding:40px;'>🔍 Chargement des animaux depuis la base de données...</td></tr>";
+      
       try {
         const res = await fetch(API_URL);
         animaux = await res.json();
-        afficher();
+        console.log("Animaux reçus du backend:", animaux);
+        
+        if (animaux.length === 0) {
+          tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;padding:40px;'>❌ Aucun animal trouvé dans la base de données.</td></tr>";
+        } else {
+          afficher();
+        }
       } catch (err) {
         console.error("Erreur chargement animaux:", err);
+        tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;padding:40px;color:#E05C5C;'>❌ Erreur de connexion au serveur.</td></tr>";
       }
     }
 
@@ -106,24 +116,36 @@
     function afficher() {
       const search = document.getElementById("search").value.toLowerCase();
       const tbody = document.getElementById("tbody");
+      if (!tbody) return;
       tbody.innerHTML = "";
 
       animaux
         .filter(a => filtreActif === "tous" || a.statut === filtreActif)
-        .filter(a => (a.tag||"").toLowerCase().includes(search) || (a.nom||"").toLowerCase().includes(search))
+        .filter(a => {
+            const nomString = (a.nom || "").toLowerCase();
+            const tagString = (a.tag || "").toLowerCase();
+            return nomString.includes(search) || tagString.includes(search);
+        })
         .forEach(a => {
           const gmqVal = parseFloat(a.gmq || 0).toFixed(2);
           const gmqStyle = gmqVal < 0.3 ? "color:#E05C5C;font-weight:700" : "";
+          const displayTag = a.tag && a.tag !== "" ? a.tag : "SANS TAG";
+          const displayNom = a.nom || "-";
+          const displayRace = a.race || "-";
+          const displayAge = a.age_mois != null ? `${a.age_mois} mois` : "-";
+          const displayPoids = a.poids_actuel != null ? `${a.poids_actuel} kg` : "-";
+          const displayStatut = a.statut || "actif";
+          
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td><span class="tag-pill">${a.tag}</span></td>
-            <td>${a.nom || "?"}</td>
-            <td>${a.race}</td>
-            <td>${a.sexe === "M" ? "♂ Mâle" : "♀ Femelle"}</td>
-            <td>${a.age_mois} mois</td>
-            <td>${a.poids_actuel} kg</td>
+            <td><span class="tag-pill">${displayTag}</span></td>
+            <td>${displayNom}</td>
+            <td>${displayRace}</td>
+            <td>${a.sexe === "M" ? "♂ Mâle" : a.sexe === "F" ? "♀ Femelle" : "-"}</td>
+            <td>${displayAge}</td>
+            <td>${displayPoids}</td>
             <td style="${gmqStyle}">${gmqVal} kg/j</td>
-            <td><span class="statut-badge ${a.statut}">${a.statut}</span></td>
+            <td><span class="statut-badge ${displayStatut}">${displayStatut}</span></td>
           `;
           tbody.appendChild(tr);
         });
