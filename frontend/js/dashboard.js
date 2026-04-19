@@ -1,11 +1,5 @@
-// =============================================
-//  dashboard.js — BoviBot
-//  Données fictives (mock) en attendant le backend FastAPI
-//  À remplacer par de vrais appels API plus tard
-// =============================================
-
-// URL du backend (à changer quand Mame Diarra aura lancé FastAPI)
-const API_URL = "http://localhost:8002";
+// URL du backend
+const API_URL = ""; // Racine relative car servi par FastAPI
 
 // ---- DATE DU JOUR ----
 document.getElementById("today-date").textContent = new Date().toLocaleDateString("fr-FR", {
@@ -13,60 +7,33 @@ document.getElementById("today-date").textContent = new Date().toLocaleDateStrin
 });
 
 // =====================
-//  DONNÉES MOCK
-//  (simulées en attendant le vrai backend)
+//  FONCTIONS D'AFFICHAGE (API REEL)
 // =====================
 
-const MOCK = {
-  stats: {
-    animaux: 24,
-    gmq: 0.48,
-    alertes: 5,
-    velages: 3,
-  },
+async function afficherStats() {
+  try {
+    const r = await fetch(`${API_URL}/stats`);
+    const s = await r.json();
 
-  alertes: [
-    { type: "critique",  icon: "🚨", message: "TAG-007 — poids critique : 52 kg avant 6 mois", time: "Il y a 2h" },
-    { type: "attention", icon: "⚠️", message: "TAG-012 — vaccin dépassé depuis 8 jours", time: "Il y a 5h" },
-    { type: "attention", icon: "🍼", message: "TAG-003 — vêlage prévu dans 4 jours", time: "Aujourd'hui" },
-    { type: "info",      icon: "📊", message: "Rapport hebdomadaire généré automatiquement", time: "Hier" },
-    { type: "critique",  icon: "🚨", message: "TAG-019 — statut changé : actif → malade", time: "Il y a 3j" },
-  ],
-
-  animaux: [
-    { tag: "TAG-001", race: "Zébu Gobra", sexe: "M", age: "18 mois", gmq: "0.52", statut: "actif" },
-    { tag: "TAG-002", race: "Ndama",      sexe: "F", age: "24 mois", gmq: "0.45", statut: "actif" },
-    { tag: "TAG-003", race: "Zébu Gobra", sexe: "F", age: "36 mois", gmq: "0.60", statut: "actif" },
-    { tag: "TAG-007", race: "Ndama",      sexe: "M", age: "4 mois",  gmq: "0.25", statut: "malade" },
-    { tag: "TAG-012", race: "Métis",      sexe: "F", age: "30 mois", gmq: "0.38", statut: "actif" },
-    { tag: "TAG-019", race: "Zébu Gobra", sexe: "M", age: "12 mois", gmq: "0.41", statut: "malade" },
-  ]
-};
-
-// =====================
-//  FONCTIONS D'AFFICHAGE
-// =====================
-
-function afficherStats() {
-  // Quand le backend sera prêt, remplacer par :
-  // const data = await fetch(`${API_URL}/stats`).then(r => r.json());
-  const s = MOCK.stats;
-
-  animerNombre("stat-animaux", s.animaux);
-  animerNombre("stat-gmq", s.gmq, true);
-  animerNombre("stat-alertes", s.alertes);
-  animerNombre("stat-velages", s.velages);
+    animerNombre("stat-animaux", s.animaux);
+    animerNombre("stat-gmq", s.gmq, true);
+    animerNombre("stat-alertes", s.alertes);
+    animerNombre("stat-velages", s.velages);
+  } catch (err) {
+    console.error("Erreur stats:", err);
+  }
 }
 
 function animerNombre(id, valeurFinale, decimal = false) {
   const el = document.getElementById(id);
+  if (!el) return;
   let debut = 0;
   const duree = 800;
   const debut_ts = performance.now();
 
   function step(ts) {
     const progress = Math.min((ts - debut_ts) / duree, 1);
-    const eased = 1 - Math.pow(1 - progress, 3); // ease out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
     const valeur = debut + (valeurFinale - debut) * eased;
     el.textContent = decimal ? valeur.toFixed(2) : Math.round(valeur);
     if (progress < 1) requestAnimationFrame(step);
@@ -74,52 +41,76 @@ function animerNombre(id, valeurFinale, decimal = false) {
   requestAnimationFrame(step);
 }
 
-function afficherAlertes() {
+async function afficherAlertes() {
   const container = document.getElementById("alertes-list");
-  container.innerHTML = "";
+  if (!container) return;
+  
+  try {
+    const r = await fetch(`${API_URL}/alertes`);
+    const alertes = await r.json();
+    
+    container.innerHTML = "";
+    alertes.forEach(a => {
+      let icon = "⚠️";
+      if (a.type === "poids") icon = "🚨";
+      if (a.type === "velage") icon = "🍼";
+      if (a.type === "vaccination") icon = "💉";
+      if (a.type === "autre") icon = "📊";
 
-  MOCK.alertes.forEach(a => {
-    const div = document.createElement("div");
-    div.className = `alerte-item ${a.type}`;
-    div.innerHTML = `
-      <span class="alerte-icon">${a.icon}</span>
-      <span class="alerte-msg">${a.message}</span>
-      <span class="alerte-time">${a.time}</span>
-    `;
-    container.appendChild(div);
-  });
+      const div = document.createElement("div");
+      div.className = `alerte-item ${a.niveau}`;
+      div.innerHTML = `
+        <span class="alerte-icon">${icon}</span>
+        <span class="alerte-msg">${a.message}</span>
+        <span class="alerte-time">${new Date(a.date_creation).toLocaleTimeString("fr-FR", {hour: '2-digit', minute:'2-digit'})}</span>
+      `;
+      container.appendChild(div);
+    });
 
-  // Mise à jour du badge
-  document.getElementById("badge-alertes").textContent = MOCK.stats.alertes;
+    // Mise à jour du badge
+    document.getElementById("badge-alertes").textContent = alertes.length;
+  } catch (err) {
+    console.error("Erreur alertes:", err);
+  }
 }
 
-function afficherAnimaux() {
+async function afficherAnimaux() {
   const tbody = document.getElementById("animaux-tbody");
-  tbody.innerHTML = "";
+  if (!tbody) return;
 
-  MOCK.animaux.forEach(a => {
-    const gmqColor = parseFloat(a.gmq) < 0.3 ? "color:#E05C5C;font-weight:700" : "";
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><span class="tag-pill">${a.tag}</span></td>
-      <td>${a.race}</td>
-      <td>${a.sexe === "M" ? "♂ Mâle" : "♀ Femelle"}</td>
-      <td>${a.age}</td>
-      <td style="${gmqColor}">${a.gmq} kg/j</td>
-      <td><span class="statut-badge ${a.statut}">${a.statut}</span></td>
-    `;
-    tbody.appendChild(tr);
-  });
+  try {
+    const r = await fetch(`${API_URL}/api/animaux`);
+    const animaux = await r.json();
+
+    tbody.innerHTML = "";
+    animaux.forEach(a => {
+      const gmqValue = parseFloat(a.gmq);
+      const gmqColor = gmqValue < 0.3 ? "color:#E05C5C;font-weight:700" : "";
+      
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><span class="tag-pill">${a.tag}</span></td>
+        <td>${a.race}</td>
+        <td>${a.sexe === "M" ? "♂ Mâle" : "♀ Femelle"}</td>
+        <td>${a.age_mois} mois</td>
+        <td style="${gmqColor}">${gmqValue.toFixed(2)} kg/j</td>
+        <td><span class="statut-badge ${a.statut}">${a.statut}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Erreur animaux:", err);
+  }
 }
 
 // =====================
 //  CONNEXION BACKEND
-//  (vérification que l'API tourne)
 // =====================
 async function verifierBackend() {
   const pill = document.querySelector(".status-pill");
+  if (!pill) return;
   try {
-    const r = await fetch(`${API_URL}/`, { signal: AbortSignal.timeout(2000) });
+    const r = await fetch(`/`, { signal: AbortSignal.timeout(2000) });
     if (r.ok) {
       pill.className = "status-pill online";
       pill.innerHTML = `<span class="dot"></span> Backend connecté`;
@@ -131,9 +122,16 @@ async function verifierBackend() {
 }
 
 // =====================
-//  INIT
+//  INIT PARTAGÉ
 // =====================
-afficherStats();
-afficherAlertes();
-afficherAnimaux();
-verifierBackend();
+function initDashboard() {
+  console.log("Démarrage du dashboard...");
+  afficherStats();
+  afficherAlertes();
+  afficherAnimaux();
+  verifierBackend();
+}
+
+// Utilisation de addEventListener pour éviter les conflits avec charts.js
+window.addEventListener('load', initDashboard);
+

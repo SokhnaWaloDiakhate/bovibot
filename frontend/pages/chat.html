@@ -304,6 +304,34 @@
       background: #F0FAF5;
     }
 
+    /* Table styles for AI results */
+    .result-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      font-size: 0.85rem;
+    }
+    .result-table th {
+      background: #f8f9fa;
+      color: #333;
+      font-weight: 600;
+      padding: 10px;
+      text-align: left;
+      border-bottom: 2px solid #eee;
+      white-space: nowrap;
+    }
+    .result-table td {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      color: #555;
+      white-space: nowrap;
+    }
+    .result-table tr:hover { background: #fcfcfc; }
+
     /* Zone saisie */
     .chat-footer {
       padding: 16px 24px;
@@ -490,95 +518,100 @@
 
   <script>
     // =============================================
-    //  CONFIGURATION
+    //  VRAI MOTEUR BOVIBOT (Connexion FastAPI)
     // =============================================
-    const USE_MOCK = true;  // ← mettre false quand Mame Diarra a pushé le backend
-    const API_URL  = "http://localhost:8002";
+    let conversations = JSON.parse(localStorage.getItem('bovibot_history')) || [];
+    let currentPendingSql = localStorage.getItem('bovibot_pending_sql') || null;
 
-    let modeActif = "consultation";
-    let conversations = [];  // historique de la conv actuelle
-    let enAttenteDAction = null;
+    // Charger l'historique visuel au démarrage
+    window.addEventListener('DOMContentLoaded', () => {
+        if (conversations.length > 0) {
+            const ws = document.getElementById("welcome-screen");
+            if (ws) ws.remove();
+            conversations.forEach(m => {
+                if (m.role === "user") ajouterMessage(m.content, "user", false);
+                else {
+                    // Pour le bot, on simule une réponse sans tableau (pour simplifier le rechargement)
+                    ajouterMessage(m.content, "bot", false);
+                }
+            });
+        }
+    });
 
-    // =============================================
-    //  MODE (consultation / action)
-    // =============================================
-    function setMode(mode) {
-      modeActif = mode;
-      document.getElementById("btn-consultation").classList.toggle("active", mode === "consultation");
-      document.getElementById("btn-action").classList.toggle("active", mode === "action");
-
-      const placeholder = mode === "consultation"
-        ? "Posez une question sur votre troupeau…"
-        : "Décrivez une action (pesée, vente…)";
-      document.getElementById("chat-textarea").placeholder = placeholder;
-    }
-
-    // =============================================
-    //  ENVOI MESSAGE
-    // =============================================
-    async function envoyerMessage() {
+    // --- ENVOYER UN MESSAGE ---
+    async function envoyerMessage(texteForce = null) {
       const ta = document.getElementById("chat-textarea");
-      const texte = ta.value.trim();
+      const texte = texteForce || ta.value.trim();
       if (!texte) return;
 
-      // Cacher welcome screen
+      // Nettoyage UI
       const ws = document.getElementById("welcome-screen");
       if (ws) ws.remove();
       document.getElementById("suggestions").style.display = "none";
-
-      ta.value = "";
-      ta.style.height = "auto";
+      if (!texteForce) ta.value = "";
       document.getElementById("send-btn").disabled = true;
 
       // Afficher message utilisateur
       ajouterMessage(texte, "user");
-      conversations.push({ role: "user", content: texte });
 
-      // Typing indicator
+      // Typing...
       const typingId = afficherTyping();
 
-      await delay(USE_MOCK ? 1000 : 0);
+      try {
+        const payload = {
+          message: texte,
+          history: conversations.slice(-10), // On garde les 10 derniers échanges (pour la mémoire)
+          pending_sql: currentPendingSql
+        };
 
-      // Obtenir réponse
-      let reponse;
-      if (USE_MOCK) {
-        reponse = getMockReponse(texte);
-      } else {
-        reponse = await appelAPI(texte);
+        const r = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await r.json();
+        retirerTyping(typingId);
+        document.getElementById("send-btn").disabled = false;
+
+        if (data.response) {
+          // Mise à jour de la mémoire
+          conversations.push({ role: "user", content: texte });
+          conversations.push({ role: "assistant", content: data.response });
+          localStorage.setItem('bovibot_history', JSON.stringify(conversations.slice(-20)));
+
+          currentPendingSql = data.pending_sql;
+          if (currentPendingSql) localStorage.setItem('bovibot_pending_sql', currentPendingSql);
+          else localStorage.removeItem('bovibot_pending_sql');
+
+          // Afficher réponse bot
+          afficherReponseBot({
+              texte: data.response,
+              tableau: data.results,
+              confirmation: data.pending_sql ? "Voulez-vous valider cette action ?" : null
+          });
+
+          mettreAJourHistorique(texte);
+        }
+
+      } catch (err) {
+        retirerTyping(typingId);
+        document.getElementById("send-btn").disabled = false;
+        ajouterMessage("❌ Erreur : Impossible de joindre le serveur. Vérifiez que le backend tourne sur le port 8000.", "bot");
       }
-
-      retirerTyping(typingId);
-      document.getElementById("send-btn").disabled = false;
-
-      // Afficher réponse bot
-      afficherReponseBot(reponse);
-      conversations.push({ role: "assistant", content: reponse.texte });
-
-      // Mettre à jour historique sidebar
-      mettreAJourHistorique(texte);
     }
 
-    // =============================================
-    //  AFFICHAGE MESSAGES
-    // =============================================
-    function ajouterMessage(texte, role) {
+    // --- UI HELPERS ---
+    function ajouterMessage(texte, role, save = true) {
       const body = document.getElementById("chat-body");
-      const now = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-
       const row = document.createElement("div");
       row.className = `msg-row ${role}`;
-
-      const avatarContent = role === "bot" ? "🤖" : "OD";
-      const senderName    = role === "bot" ? "BoviBot" : "Ousmane";
-
+      const avatar = role === "bot" ? "🤖" : "OD";
       row.innerHTML = `
-        <div class="msg-avatar-sm">${avatarContent}</div>
+        <div class="msg-avatar-sm">${avatar}</div>
         <div class="msg-content">
-          <span class="msg-sender">${senderName}</span>
           <div class="msg-bubble">${texte}</div>
-          <span class="msg-time">${now}</span>
         </div>`;
-
       body.appendChild(row);
       body.scrollTop = body.scrollHeight;
       return row;
@@ -586,47 +619,27 @@
 
     function afficherReponseBot(reponse) {
       const body = document.getElementById("chat-body");
-      const now  = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-
       const row = document.createElement("div");
       row.className = "msg-row bot";
-
-      let contenuExtra = "";
-
-      if (reponse.sql) {
-        contenuExtra += `<div class="sql-block">-- SQL généré\n${reponse.sql}</div>`;
-      }
-
-      if (reponse.tableau) {
-        contenuExtra += genererTableau(reponse.tableau);
-      }
-
+      
+      let extra = "";
+      if (reponse.tableau) extra += genererTableau(reponse.tableau);
       if (reponse.confirmation) {
-        enAttenteDAction = reponse.action;
-        contenuExtra += `
+          extra += `
           <div class="confirm-box">
-            <p>⚠️ <strong>Confirmation requise</strong><br>${reponse.confirmation}</p>
+            <p><strong>⚠️ ACTION EN ATTENTE</strong></p>
             <div class="confirm-actions">
-              <button class="btn-confirm oui" onclick="confirmer(this)">✅ Oui, confirmer</button>
-              <button class="btn-confirm non" onclick="annuler(this)">❌ Annuler</button>
+              <button class="btn-confirm oui" onclick="envoyerMessage('Oui')">✅ Oui, valider</button>
+              <button class="btn-confirm non" onclick="envoyerMessage('Non')">❌ Annuler</button>
             </div>
           </div>`;
       }
 
-      const badgeMode = `<span class="mode-badge ${reponse.mode}">${reponse.mode === "consultation" ? "🔍 Consultation" : "⚡ Action"}</span>`;
-
       row.innerHTML = `
         <div class="msg-avatar-sm">🤖</div>
-        <div class="msg-content" style="max-width:85%">
-          <span class="msg-sender">BoviBot</span>
-          <div class="msg-bubble">
-            ${badgeMode}<br>
-            ${reponse.texte}
-            ${contenuExtra}
-          </div>
-          <span class="msg-time">${now}</span>
+        <div class="msg-content" style="max-width:90%">
+          <div class="msg-bubble">${reponse.texte} ${extra}</div>
         </div>`;
-
       body.appendChild(row);
       body.scrollTop = body.scrollHeight;
     }
@@ -635,169 +648,26 @@
       if (!data || !data.length) return "";
       const headers = Object.keys(data[0]);
       const ths = headers.map(h => `<th>${h}</th>`).join("");
-      const trs = data.map(row =>
-        `<tr>${headers.map(h => `<td>${row[h]}</td>`).join("")}</tr>`
-      ).join("");
-      return `<table class="result-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+      const trs = data.map(row => `<tr>${headers.map(h => `<td>${row[h] || "-"}</td>`).join("")}</tr>`).join("");
+      return `<div style="overflow-x:auto"><table class="result-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
     }
 
-    // =============================================
-    //  TYPING INDICATOR
-    // =============================================
-    let typingCounter = 0;
     function afficherTyping() {
-      const id = ++typingCounter;
+      const id = Date.now();
       const body = document.getElementById("chat-body");
       const row = document.createElement("div");
       row.className = "msg-row bot";
       row.id = `typing-${id}`;
-      row.innerHTML = `
-        <div class="msg-avatar-sm">🤖</div>
-        <div class="msg-content">
-          <div class="typing-dots">
-            <span></span><span></span><span></span>
-          </div>
-        </div>`;
+      row.innerHTML = `<div class="msg-avatar-sm">🤖</div><div class="msg-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
       body.appendChild(row);
       body.scrollTop = body.scrollHeight;
       return id;
     }
     function retirerTyping(id) {
-      const el = document.getElementById(`typing-${id}`);
-      if (el) el.remove();
+        const el = document.getElementById(`typing-${id}`);
+        if (el) el.remove();
     }
 
-    // =============================================
-    //  CONFIRMATION ACTION
-    // =============================================
-    function confirmer(btn) {
-      btn.closest(".confirm-box").innerHTML = `<p style="color:#2E7D55;font-weight:500">✅ Action confirmée ! En Semaine 2, j'appellerai <code>${enAttenteDAction || "sp_enregistrer_pesee"}</code> via FastAPI.</p>`;
-      enAttenteDAction = null;
-    }
-    function annuler(btn) {
-      btn.closest(".confirm-box").innerHTML = `<p style="color:#C0392B;font-weight:500">❌ Action annulée. Aucune modification.</p>`;
-      enAttenteDAction = null;
-    }
-
-    // =============================================
-    //  RÉPONSES MOCK
-    // =============================================
-    function getMockReponse(texte) {
-      const t = texte.toLowerCase();
-
-      // ACTION : pesée
-      const mPesee = texte.match(/(\d{2,3})\s*kg.{0,20}(TAG-\d+)|(TAG-\d+).{0,20}(\d{2,3})\s*kg/i);
-      if (mPesee) {
-        const tag    = mPesee[2] || mPesee[3];
-        const poids  = mPesee[1] || mPesee[4];
-        const today  = new Date().toLocaleDateString("fr-FR");
-        return {
-          mode: "action",
-          texte: `J'ai identifié une demande d'enregistrement de pesée :`,
-          confirmation: `Animal : <strong>${tag}</strong> — Poids : <strong>${poids} kg</strong> — Date : <strong>${today}</strong><br>Voulez-vous confirmer l'appel à <code>sp_enregistrer_pesee()</code> ?`,
-          action: "sp_enregistrer_pesee"
-        };
-      }
-
-      // ACTION : vente
-      const mVente = texte.match(/vente?.{0,10}(TAG-\d+)/i);
-      if (mVente) {
-        return {
-          mode: "action",
-          texte: `Demande de vente détectée pour <strong>${mVente[1]}</strong>.`,
-          confirmation: `Confirmez-vous la déclaration de vente de <strong>${mVente[1]}</strong> ? Cela appellera <code>sp_declarer_vente()</code>.`,
-          action: "sp_declarer_vente"
-        };
-      }
-
-      // CONSULTATION : GMQ
-      if (t.includes("gmq") || t.includes("croissance")) {
-        return {
-          mode: "consultation",
-          texte: "2 animaux ont un GMQ inférieur à 0.3 kg/jour :",
-          sql: "SELECT a.numero_tag, fn_gmq(a.id) AS gmq\nFROM animaux a\nWHERE a.statut = 'actif'\nHAVING gmq < 0.3;",
-          tableau: [
-            { Tag: "TAG-006", Nom: "Modou", GMQ: "0.18 kg/j", Race: "Zébu Gobra" },
-            { Tag: "TAG-007", Nom: "Dior",  GMQ: "0.25 kg/j", Race: "Ndama" }
-          ]
-        };
-      }
-
-      // CONSULTATION : vêlages
-      if (t.includes("velage") || t.includes("vêlage") || t.includes("naissance")) {
-        return {
-          mode: "consultation",
-          texte: "3 vêlages sont prévus dans les 7 prochains jours :",
-          sql: "SELECT a.numero_tag, r.date_velage_prevue\nFROM reproduction r\nJOIN animaux a ON r.mere_id = a.id\nWHERE r.date_velage_prevue BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY);",
-          tableau: [
-            { Mère: "TAG-003", "Date prévue": "05/04/2026", Statut: "en gestation" },
-            { Mère: "TAG-008", "Date prévue": "07/04/2026", Statut: "en gestation" },
-            { Mère: "TAG-015", "Date prévue": "08/04/2026", Statut: "en gestation" }
-          ]
-        };
-      }
-
-      // CONSULTATION : vaccins
-      if (t.includes("vaccin") || t.includes("santé") || t.includes("sante")) {
-        return {
-          mode: "consultation",
-          texte: "2 animaux n'ont pas été vaccinés depuis plus de 6 mois :",
-          sql: "SELECT a.numero_tag, MAX(s.date_acte) AS dernier_vaccin\nFROM sante s\nJOIN animaux a ON s.animal_id = a.id\nWHERE s.type = 'vaccination'\nGROUP BY a.id\nHAVING dernier_vaccin < DATE_SUB(NOW(), INTERVAL 6 MONTH);",
-          tableau: [
-            { Tag: "TAG-012", "Dernier vaccin": "18/09/2025", "Retard": "6 mois" },
-            { Tag: "TAG-019", "Dernier vaccin": "01/08/2025", "Retard": "8 mois" }
-          ]
-        };
-      }
-
-      // CONSULTATION : animaux actifs
-      if (t.includes("animaux") || t.includes("troupeau") || t.includes("actif")) {
-        return {
-          mode: "consultation",
-          texte: "Le troupeau compte actuellement <strong>24 animaux actifs</strong> :",
-          sql: "SELECT a.numero_tag, fn_age_en_mois(a.id) AS age_mois,\n       fn_gmq(a.id) AS gmq\nFROM animaux a\nWHERE a.statut = 'actif'\nORDER BY age_mois DESC;",
-          tableau: [
-            { Tag: "TAG-003", Race: "Zébu Gobra", "Âge": "36 mois", GMQ: "0.60" },
-            { Tag: "TAG-002", Race: "Ndama",      "Âge": "24 mois", GMQ: "0.45" },
-            { Tag: "TAG-001", Race: "Zébu Gobra", "Âge": "18 mois", GMQ: "0.52" },
-          ]
-        };
-      }
-
-      // Défaut
-      return {
-        mode: "consultation",
-        texte: "Je n'ai pas compris votre demande. Essayez :<br>• « Quels animaux ont un GMQ &lt; 0.3 ? »<br>• « Vêlages prévus cette semaine »<br>• « Enregistre 320 kg pour TAG-001 »"
-      };
-    }
-
-    // =============================================
-    //  APPEL VRAI BACKEND (Semaine 2 — quand Mame Diarra pushe)
-    // =============================================
-    async function appelAPI(texte) {
-      try {
-        const r = await fetch(`${API_URL}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: texte, mode: modeActif, history: conversations })
-        });
-        const data = await r.json();
-        return {
-          mode: data.mode || modeActif,
-          texte: data.response,
-          sql: data.sql || null,
-          tableau: data.results || null,
-          confirmation: data.confirmation || null,
-          action: data.action || null
-        };
-      } catch {
-        return { mode: "consultation", texte: "❌ Impossible de joindre le backend. Vérifiez que FastAPI tourne sur le port 8002." };
-      }
-    }
-
-    // =============================================
-    //  UTILITAIRES
-    // =============================================
     function utiliserSuggestion(btn) {
       document.getElementById("chat-textarea").value = btn.textContent;
       envoyerMessage();
@@ -805,48 +675,22 @@
 
     function nouveauChat() {
       conversations = [];
-      enAttenteDAction = null;
-      const body = document.getElementById("chat-body");
-      body.innerHTML = `
-        <div class="welcome" id="welcome-screen">
-          <div class="welcome-icon">🐄</div>
-          <h2>Nouvelle conversation</h2>
-          <p>Posez votre question ou décrivez une action à effectuer sur le troupeau.</p>
-        </div>`;
-      document.getElementById("suggestions").style.display = "flex";
-      document.querySelectorAll(".history-item").forEach(i => i.classList.remove("active"));
-    }
-
-    function chargerConv(index) {
-      document.querySelectorAll(".history-item").forEach((i, idx) => {
-        i.classList.toggle("active", idx === index);
-      });
-      nouveauChat();
+      localStorage.removeItem('bovibot_pending_sql');
+      localStorage.removeItem('bovibot_history');
+      location.reload();
     }
 
     function mettreAJourHistorique(texte) {
       const liste = document.getElementById("history-list");
       const item = document.createElement("div");
       item.className = "history-item active";
-      const court = texte.length > 30 ? texte.substring(0, 28) + "…" : texte;
-      item.innerHTML = `<span class="history-icon">💬</span> ${court}`;
+      item.innerHTML = `<span class="history-icon">💬</span> ${texte.substring(0, 25)}...`;
       liste.insertBefore(item, liste.children[1]);
     }
 
-    function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-    // Auto-resize textarea
-    document.getElementById("chat-textarea").addEventListener("input", function() {
-      this.style.height = "auto";
-      this.style.height = Math.min(this.scrollHeight, 120) + "px";
-    });
-
-    // Entrée pour envoyer, Maj+Entrée pour nouvelle ligne
-    document.getElementById("chat-textarea").addEventListener("keydown", function(e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        envoyerMessage();
-      }
+    // Events
+    document.getElementById("chat-textarea").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyerMessage(); }
     });
   </script>
 
