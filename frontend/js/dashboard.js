@@ -1,137 +1,122 @@
-// URL du backend
-const API_URL = ""; // Racine relative car servi par FastAPI
+/**
+ * dashboard.js - Unified Logic for Dashboard & Charts
+ */
+const API_URL = "";
+let chartGMQ = null;
+let chartRaces = null;
 
-// ---- DATE DU JOUR ----
-document.getElementById("today-date").textContent = new Date().toLocaleDateString("fr-FR", {
-  weekday: "long", year: "numeric", month: "long", day: "numeric"
+async function chargerStats() {
+    try {
+        const response = await fetch(`${API_URL}/stats`);
+        const data = await response.json();
+        document.getElementById("stat-animaux").textContent = data.animaux || "0";
+        document.getElementById("stat-gmq").textContent = data.gmq || "0.0";
+        document.getElementById("stat-alertes").textContent = data.alertes || "0";
+        document.getElementById("stat-velages").textContent = data.velages || "0";
+    } catch (e) { console.error("Stats error", e); }
+}
+
+async function initCharts() {
+    // console.log("Initializing charts...");
+    await Promise.all([creerChartGMQ(), creerChartRaces()]);
+}
+
+async function creerChartGMQ() {
+    const canvas = document.getElementById("chart-gmq");
+    if (!canvas) return;
+    try {
+        const r = await fetch(`${API_URL}/api/stats/gmq_history`);
+        const d = await r.json();
+        if (chartGMQ) chartGMQ.destroy();
+        chartGMQ = new Chart(canvas.getContext("2d"), {
+            type: "line",
+            data: {
+                labels: d.labels,
+                datasets: [
+                    { label: "Moyenne", data: d.troupeau, borderColor: "#4CAF82", tension: 0.4, fill: false },
+                    { label: "Objectif", data: d.meilleur, borderColor: "#F0A030", borderDash: [5, 5], tension: 0.4, fill: false }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0 } } }
+        });
+    } catch (e) { console.error("GMQ Chart error", e); }
+}
+
+async function creerChartRaces() {
+    const canvas = document.getElementById("chart-races");
+    if (!canvas) return;
+    try {
+        const r = await fetch(`${API_URL}/api/stats/races`);
+        const dataRaces = await r.json();
+        if (chartRaces) chartRaces.destroy();
+        const colors = ["#4CAF82", "#F0A030", "#7B6CF6", "#E05C5C", "#6B7E68"];
+        chartRaces = new Chart(canvas.getContext("2d"), {
+            type: "doughnut",
+            data: {
+                labels: dataRaces.map(r => r.race),
+                datasets: [{ data: dataRaces.map(r => r.nb), backgroundColor: colors }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+        const legendEl = document.getElementById("donut-legend");
+        if (legendEl) {
+            legendEl.innerHTML = "";
+            dataRaces.forEach((r, i) => {
+                const item = document.createElement("div");
+                item.style.fontSize = "12px";
+                item.innerHTML = `<span style="color:${colors[i]}">●</span> ${r.race}: <strong>${r.nb}</strong>`;
+                legendEl.appendChild(item);
+            });
+        }
+    } catch (e) { console.error("Races Chart error", e); }
+}
+
+async function chargerDernieresAlertes() {
+    try {
+        const response = await fetch(`${API_URL}/alertes`);
+        const alertes = await response.json();
+        const listEl = document.getElementById("alertes-list");
+        listEl.innerHTML = "";
+        if (alertes.length === 0) {
+            listEl.innerHTML = "<div style='color:var(--text-secondary);font-size:12px;padding:10px;'>Aucune alerte.</div>";
+            return;
+        }
+        alertes.slice(0, 4).forEach(a => {
+            const item = document.createElement("div");
+            item.className = "alerte-item attention"; // Style simplifie
+            item.innerHTML = `<span>!</span> <div class="alerte-msg">${a.message}</div>`;
+            listEl.appendChild(item);
+        });
+    } catch (e) { console.error("Alertes error", e); }
+}
+
+async function chargerTableauAnimaux() {
+    try {
+        const response = await fetch(`${API_URL}/api/animaux`);
+        const animaux = await response.json();
+        const tbody = document.getElementById("animaux-tbody");
+        tbody.innerHTML = "";
+        animaux.slice(0, 5).forEach(a => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td><span class="tag-pill">${a.numero_tag}</span></td>
+                <td><strong>${a.nom}</strong></td>
+                <td>${a.race}</td>
+                <td>${a.sexe}</td>
+                <td>${a.age_mois || 0} mois</td>
+                <td>${a.poids_actuel}kg</td>
+                <td>${a.gmq || 0}</td>
+                <td><span class="statut-badge actif">actif</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) { console.error("Animaux error", e); }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("today-date").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    chargerStats();
+    initCharts();
+    chargerDernieresAlertes();
+    chargerTableauAnimaux();
 });
-
-// =====================
-//  FONCTIONS D'AFFICHAGE (API REEL)
-// =====================
-
-async function afficherStats() {
-  try {
-    const r = await fetch(`${API_URL}/stats`);
-    const s = await r.json();
-
-    animerNombre("stat-animaux", s.animaux);
-    animerNombre("stat-gmq", s.gmq, true);
-    animerNombre("stat-alertes", s.alertes);
-    animerNombre("stat-velages", s.velages);
-  } catch (err) {
-    console.error("Erreur stats:", err);
-  }
-}
-
-function animerNombre(id, valeurFinale, decimal = false) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  let debut = 0;
-  const duree = 800;
-  const debut_ts = performance.now();
-
-  function step(ts) {
-    const progress = Math.min((ts - debut_ts) / duree, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    const valeur = debut + (valeurFinale - debut) * eased;
-    el.textContent = decimal ? valeur.toFixed(2) : Math.round(valeur);
-    if (progress < 1) requestAnimationFrame(step);
-  }
-  requestAnimationFrame(step);
-}
-
-async function afficherAlertes() {
-  const container = document.getElementById("alertes-list");
-  if (!container) return;
-  
-  try {
-    const r = await fetch(`${API_URL}/alertes`);
-    const alertes = await r.json();
-    
-    container.innerHTML = "";
-    alertes.forEach(a => {
-      let icon = "⚠️";
-      if (a.type === "poids") icon = "🚨";
-      if (a.type === "velage") icon = "🍼";
-      if (a.type === "vaccination") icon = "💉";
-      if (a.type === "autre") icon = "📊";
-
-      const div = document.createElement("div");
-      div.className = `alerte-item ${a.niveau}`;
-      div.innerHTML = `
-        <span class="alerte-icon">${icon}</span>
-        <span class="alerte-msg">${a.message}</span>
-        <span class="alerte-time">${new Date(a.date_creation).toLocaleTimeString("fr-FR", {hour: '2-digit', minute:'2-digit'})}</span>
-      `;
-      container.appendChild(div);
-    });
-
-    // Mise à jour du badge
-    document.getElementById("badge-alertes").textContent = alertes.length;
-  } catch (err) {
-    console.error("Erreur alertes:", err);
-  }
-}
-
-async function afficherAnimaux() {
-  const tbody = document.getElementById("animaux-tbody");
-  if (!tbody) return;
-
-  try {
-    const r = await fetch(`${API_URL}/api/animaux`);
-    const animaux = await r.json();
-
-    tbody.innerHTML = "";
-    animaux.forEach(a => {
-      const gmqValue = parseFloat(a.gmq);
-      const gmqColor = gmqValue < 0.3 ? "color:#E05C5C;font-weight:700" : "";
-      
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><span class="tag-pill">${a.tag}</span></td>
-        <td>${a.race}</td>
-        <td>${a.sexe === "M" ? "♂ Mâle" : "♀ Femelle"}</td>
-        <td>${a.age_mois} mois</td>
-        <td style="${gmqColor}">${gmqValue.toFixed(2)} kg/j</td>
-        <td><span class="statut-badge ${a.statut}">${a.statut}</span></td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (err) {
-    console.error("Erreur animaux:", err);
-  }
-}
-
-// =====================
-//  CONNEXION BACKEND
-// =====================
-async function verifierBackend() {
-  const pill = document.querySelector(".status-pill");
-  if (!pill) return;
-  try {
-    const r = await fetch(`/`, { signal: AbortSignal.timeout(2000) });
-    if (r.ok) {
-      pill.className = "status-pill online";
-      pill.innerHTML = `<span class="dot"></span> Backend connecté`;
-    } else { throw new Error(); }
-  } catch {
-    pill.className = "status-pill offline";
-    pill.innerHTML = `<span class="dot"></span> Backend hors ligne (mock)`;
-  }
-}
-
-// =====================
-//  INIT PARTAGÉ
-// =====================
-function initDashboard() {
-  console.log("Démarrage du dashboard...");
-  afficherStats();
-  afficherAlertes();
-  afficherAnimaux();
-  verifierBackend();
-}
-
-// Utilisation de addEventListener pour éviter les conflits avec charts.js
-window.addEventListener('load', initDashboard);
-

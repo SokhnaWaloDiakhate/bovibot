@@ -3,560 +3,168 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>BoviBot — Alertes</title>
-  <link rel="stylesheet" href="../css/style.css"/>
+  <title>BoviBot - Alertes</title>
+  <link rel="stylesheet" href="../css/style.css?v=6"/>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
+    .alertes-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .alerte-stat-card { background: #fff; border-radius:18px; padding: 20px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 16px; border-left: 4px solid var(--c); border: 1px solid rgba(0,0,0,0.03); }
+    .alerte-stat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--bg-c); }
+    .alerte-stat-icon svg { width: 22px; height: 22px; stroke: var(--c); stroke-width: 2; fill: none; }
+    .alerte-stat-val { font-family: var(--font-display); font-size: 32px; font-weight: 800; line-height: 1; color: var(--text-primary); }
+    .alerte-stat-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; margin-top: 4px; }
 
-    /* =====================
-       STATS ALERTES
-       ===================== */
-    .alertes-stats {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-bottom: 24px;
-    }
-    .alerte-stat-card {
-      background: #fff;
-      border-radius: var(--radius);
-      padding: 16px 20px;
-      box-shadow: var(--shadow);
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      border-left: 4px solid var(--c);
-    }
-    .alerte-stat-icon {
-      font-size: 28px;
-      width: 44px; height: 44px;
-      border-radius: 12px;
-      background: var(--bg-c);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .alerte-stat-val {
-      font-family: var(--font-display);
-      font-size: 28px; font-weight: 800;
-      line-height: 1;
-    }
-    .alerte-stat-label {
-      font-size: 11px;
-      color: var(--text-secondary);
-      font-weight: 500;
-      margin-top: 3px;
-    }
-
-    /* =====================
-       FILTRES + ACTIONS
-       ===================== */
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-    .filter-tabs {
-      display: flex;
-      background: #F0EDE6;
-      border-radius: 10px;
-      padding: 3px;
-      gap: 2px;
-    }
-    .ftab {
-      padding: 7px 16px;
-      border-radius: 8px;
-      border: none;
-      background: transparent;
-      font-family: var(--font-body);
-      font-size: 12px; font-weight: 500;
-      cursor: pointer;
-      color: var(--text-secondary);
-      transition: all 0.18s;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .ftab.active {
-      background: #fff;
-      color: var(--text-primary);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-      font-weight: 600;
-    }
-    .ftab .count {
-      background: currentColor;
-      color: #fff;
-      font-size: 10px;
-      padding: 1px 6px;
-      border-radius: 10px;
-      opacity: 0.85;
-    }
-    .btn-action-toolbar {
-      margin-left: auto;
-      padding: 8px 16px;
-      border-radius: 10px;
-      border: 1.5px solid var(--border);
-      background: #fff;
-      font-family: var(--font-body);
-      font-size: 12px; font-weight: 500;
-      cursor: pointer;
-      color: var(--text-primary);
-      transition: all 0.18s;
-    }
-    .btn-action-toolbar:hover {
-      border-color: var(--accent-green);
-      color: var(--accent-green);
-    }
-    .btn-action-toolbar.danger:hover {
-      border-color: var(--accent-red);
-      color: var(--accent-red);
-    }
-
-    /* =====================
-       LISTE ALERTES
-       ===================== */
-    .alertes-container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .alerte-card {
-      background: #fff;
-      border-radius: var(--radius);
-      padding: 16px 20px;
-      box-shadow: var(--shadow);
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      border-left: 4px solid var(--c-card);
-      transition: transform 0.18s, opacity 0.3s;
-      animation: slideIn 0.25s ease both;
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateX(-10px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
-    .alerte-card.traitee {
-      opacity: 0.5;
-      border-left-color: #ccc;
-    }
-    .alerte-card:hover { transform: translateX(3px); }
-
-    .alerte-card-icon {
-      font-size: 22px;
-      width: 44px; height: 44px;
-      border-radius: 12px;
-      background: var(--bg-card);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .alerte-card-body { flex: 1; min-width: 0; }
-
-    .alerte-card-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 4px;
-    }
-    .alerte-card-type {
-      font-size: 10px; font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 2px 8px;
-      border-radius: 6px;
-      background: var(--bg-card);
-      color: var(--c-card);
-    }
-    .alerte-card-niveau {
-      font-size: 10px; font-weight: 600;
-      padding: 2px 8px; border-radius: 6px;
-    }
-    .niveau-critique  { background: #FEF0F0; color: #C0392B; }
-    .niveau-attention { background: #FEF7E8; color: #9A6000; }
-    .niveau-info      { background: #EEF6FF; color: #2563EB; }
-
-    .alerte-card-msg {
-      font-size: 13.5px;
-      color: var(--text-primary);
-      line-height: 1.5;
-      margin-bottom: 6px;
-    }
-    .alerte-card-meta {
-      font-size: 11px;
-      color: var(--text-secondary);
-      display: flex; gap: 14px; flex-wrap: wrap;
-    }
-    .alerte-card-meta span { display: flex; align-items: center; gap: 4px; }
-
-    .alerte-card-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-    .btn-traiter {
-      padding: 7px 14px;
-      border-radius: 8px;
-      border: 1.5px solid var(--accent-green);
-      background: transparent;
-      color: var(--accent-green);
-      font-family: var(--font-body);
-      font-size: 12px; font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.18s;
-    }
-    .btn-traiter:hover { background: var(--accent-green); color: #fff; }
-    .btn-traiter:disabled {
-      border-color: #ccc; color: #ccc; cursor: not-allowed;
-    }
-    .btn-supprimer {
-      padding: 7px 14px;
-      border-radius: 8px;
-      border: 1.5px solid #eee;
-      background: transparent;
-      color: var(--text-secondary);
-      font-family: var(--font-body);
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 0.18s;
-    }
-    .btn-supprimer:hover { border-color: var(--accent-red); color: var(--accent-red); }
-
-    /* Vide */
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--text-secondary);
-    }
-    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-    .empty-state p { font-size: 14px; }
-
-    @media (max-width: 900px) {
-      .alertes-stats { grid-template-columns: 1fr 1fr; }
-    }
+    .alertes-container { display: flex; flex-direction: column; gap: 12px; }
+    .alerte-card { background: #fff; border-radius: 16px; padding: 20px 24px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 18px; border-left: 4px solid var(--c); transition: all 0.2s; border: 1px solid rgba(0,0,0,0.03); }
+    .alerte-card:hover { transform: translateX(4px); box-shadow: 0 8px 25px rgba(0,0,0,0.05); }
+    .alerte-card-body { flex: 1; }
+    .alerte-level-badge { display: inline-block; padding: 3px 10px; border-radius: 30px; font-size: 10px; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; color: #fff; background: var(--c); }
+    .alerte-card-msg { font-size: 14.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.4; }
+    .alerte-card-meta { font-size: 11.5px; color: var(--text-secondary); font-weight: 500; display: flex; align-items: center; gap: 10px; }
+    
+    .btn-traiter { padding: 9px 20px; border-radius: 10px; border: 1.5px solid var(--accent-green); background: transparent; color: var(--accent-green); font-family: var(--font-body); font-size: 12.5px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+    .btn-traiter:hover { background: var(--accent-green); color: #fff; box-shadow: 0 4px 12px rgba(76,175,130,0.3); }
   </style>
 </head>
 <body>
-
-  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <span class="logo-icon">🐄</span>
-      <span class="logo-text">Bovi<strong>Bot</strong></span>
+      <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--accent-green);stroke-width:2.5;fill:none;margin-right:10px;"><path d="M12 21l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.18L12 21z"></path></svg>
+      BoviBot
     </div>
     <nav class="sidebar-nav">
-      <a href="../index.html"     class="nav-item"><span class="nav-icon">⊞</span> Dashboard</a>
-      <a href="chat.html"         class="nav-item"><span class="nav-icon">💬</span> Assistant IA</a>
-      <a href="animaux.html"      class="nav-item"><span class="nav-icon">🐃</span> Animaux</a>
-      <a href="gestations.html"   class="nav-item"><span class="nav-icon">🍼</span> Gestations</a>
-      <a href="alertes.html"      class="nav-item active"><span class="nav-icon">🔔</span> Alertes <span class="badge" id="badge-nb">5</span></a>
+      <a href="../index.html" class="nav-item">
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></span>
+        Dashboard
+      </a>
+      <a href="chat.html" class="nav-item">
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span>
+        Assistant IA
+      </a>
+      <a href="animaux.html" class="nav-item">
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"></circle><circle cx="15" cy="7" r="4"></circle><path d="M12 15c-4 0-7 2-7 6h14c0-4-3-6-7-6z"></path></svg></span>
+        Animaux
+      </a>
+      <a href="gestations.html" class="nav-item">
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 16.3c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z"></path><path d="M10 7c0-2.2-1.8-4-4-4S2 4.8 2 7"></path><path d="M22 7c0-2.2-1.8-4-4-4s-4 1.8-4 4"></path><path d="M18 16.3c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z"></path></svg></span>
+        Gestations
+      </a>
+      <a href="alertes.html" class="nav-item active">
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></span>
+        Alertes <span class="badge" id="badge-nb">--</span>
+      </a>
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar">OD</div>
+        <div class="user-avatar" style="background:#4CAF82">OD</div>
         <div>
           <div class="user-name">Ousmane Diallo</div>
-          <div class="user-role">Frontend Dev</div>
+          <div class="user-role">Frontend Dev / Gerant</div>
         </div>
       </div>
     </div>
   </aside>
 
-  <!-- MAIN -->
   <main class="main">
-
     <header class="topbar">
-      <div class="topbar-left">
-        <h1 class="page-title">Alertes système</h1>
+      <div>
+        <h1 class="page-title">Alertes systeme</h1>
         <span class="page-date" id="today-date"></span>
-      </div>
-      <div class="topbar-right">
-        <div class="status-pill online">
-          <span class="dot"></span> Scheduler actif
-        </div>
       </div>
     </header>
 
-    <!-- STATS -->
     <div class="alertes-stats">
       <div class="alerte-stat-card" style="--c:#E05C5C; --bg-c:#FEF0F0">
-        <div class="alerte-stat-icon" style="--bg-c:#FEF0F0">🚨</div>
-        <div>
-          <div class="alerte-stat-val" style="color:#E05C5C" id="count-critique">0</div>
-          <div class="alerte-stat-label">Critiques</div>
-        </div>
+        <div class="alerte-stat-icon"><svg viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
+        <div><div class="alerte-stat-val" id="count-critical">0</div><div class="alerte-stat-label">Critiques</div></div>
       </div>
       <div class="alerte-stat-card" style="--c:#F0A030; --bg-c:#FEF7E8">
-        <div class="alerte-stat-icon" style="--bg-c:#FEF7E8">⚠️</div>
-        <div>
-          <div class="alerte-stat-val" style="color:#F0A030" id="count-attention">0</div>
-          <div class="alerte-stat-label">Attention</div>
-        </div>
+        <div class="alerte-stat-icon"><svg viewBox="0 0 24 24"><path d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path></svg></div>
+        <div><div class="alerte-stat-val" id="count-warning">0</div><div class="alerte-stat-label">Attention</div></div>
       </div>
       <div class="alerte-stat-card" style="--c:#5BA4F5; --bg-c:#EEF6FF">
-        <div class="alerte-stat-icon" style="--bg-c:#EEF6FF">ℹ️</div>
-        <div>
-          <div class="alerte-stat-val" style="color:#5BA4F5" id="count-info">0</div>
-          <div class="alerte-stat-label">Informations</div>
-        </div>
+        <div class="alerte-stat-icon"><svg viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path></svg></div>
+        <div><div class="alerte-stat-val" id="count-info">0</div><div class="alerte-stat-label">Infos</div></div>
       </div>
-      <div class="alerte-stat-card" style="--c:#4CAF82; --bg-c:#E8F7EF">
-        <div class="alerte-stat-icon" style="--bg-c:#E8F7EF">✅</div>
-        <div>
-          <div class="alerte-stat-val" style="color:#4CAF82" id="count-traitee">0</div>
-          <div class="alerte-stat-label">Traitées</div>
-        </div>
+      <div class="alerte-stat-card" style="--c:#4CAF82; --bg-c:#EDF7F2">
+        <div class="alerte-stat-icon"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+        <div><div class="alerte-stat-val" id="count-traitees">0</div><div class="alerte-stat-label">Traitees</div></div>
       </div>
     </div>
 
-    <!-- TOOLBAR -->
-    <div class="toolbar">
-      <div class="filter-tabs">
-        <button class="ftab active" onclick="filtrer('toutes', this)">
-          🔔 Toutes <span class="count" id="tab-count-toutes">5</span>
-        </button>
-        <button class="ftab" onclick="filtrer('critique', this)">
-          🚨 Critiques <span class="count" id="tab-count-critique">2</span>
-        </button>
-        <button class="ftab" onclick="filtrer('attention', this)">
-          ⚠️ Attention <span class="count" id="tab-count-attention">2</span>
-        </button>
-        <button class="ftab" onclick="filtrer('info', this)">
-          ℹ️ Info <span class="count" id="tab-count-info">1</span>
-        </button>
-        <button class="ftab" onclick="filtrer('traitee', this)">
-          ✅ Traitées
-        </button>
-      </div>
-      <button class="btn-action-toolbar" onclick="toutTraiter()">✅ Tout marquer traité</button>
-      <button class="btn-action-toolbar danger" onclick="toutSupprimer()">🗑️ Supprimer traitées</button>
+    <div class="alertes-container" id="alertes-container">
+      <div style="text-align:center; padding:40px; color:var(--text-secondary);">Chargement des alertes...</div>
     </div>
-
-    <!-- LISTE -->
-    <div class="alertes-container" id="alertes-container"></div>
-
   </main>
 
   <script>
-    // =============================================
-    //  DONNÉES MOCK
-    //  (remplacer par fetch(`${API_URL}/alertes`) quand backend prêt)
-    // =============================================
-    const USE_MOCK = false;
-    const API_URL  = "http://localhost:8002";
+    let alertes = [];
+    document.getElementById("today-date").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
-    let alertes = [
-      {
-        id: 1, niveau: "critique", type: "poids_faible",
-        icon: "🚨",
-        message: "TAG-007 (Dior) — poids critique : 52 kg avant 6 mois. Seuil minimum : 60 kg.",
-        animal: "TAG-007", date: "2026-04-02 08:15", source: "trg_alerte_poids_faible", traitee: false
-      },
-      {
-        id: 2, niveau: "critique", type: "poids_faible",
-        icon: "🚨",
-        message: "TAG-006 (Modou) — GMQ très faible : 0.18 kg/jour depuis 3 semaines. Intervention recommandée.",
-        animal: "TAG-006", date: "2026-04-01 14:30", source: "evt_rapport_croissance", traitee: false
-      },
-      {
-        id: 3, niveau: "attention", type: "vaccination",
-        icon: "💉",
-        message: "TAG-012 (Khadija) — prochain RDV vaccin dépassé depuis 8 jours (prévu le 25/03/2026).",
-        animal: "TAG-012", date: "2026-04-01 09:00", source: "trg_alerte_vaccination", traitee: false
-      },
-      {
-        id: 4, niveau: "attention", type: "velage",
-        icon: "🍼",
-        message: "TAG-003 (Rama) — vêlage prévu dans 4 jours (06/04/2026). Préparer l'espace maternité.",
-        animal: "TAG-003", date: "2026-04-02 06:00", source: "evt_alerte_velages", traitee: false
-      },
-      {
-        id: 5, niveau: "info", type: "rapport",
-        icon: "📊",
-        message: "Rapport hebdomadaire généré : 24 animaux actifs, GMQ moyen 0.48 kg/j, 3 vêlages prévus.",
-        animal: null, date: "2026-03-31 07:00", source: "evt_rapport_croissance", traitee: false
-      },
-      {
-        id: 6, niveau: "attention", type: "vaccination",
-        icon: "💉",
-        message: "TAG-019 (Omar) — vaccin antiparasitaire dépassé depuis 2 mois.",
-        animal: "TAG-019", date: "2026-03-28 09:00", source: "trg_alerte_vaccination", traitee: true
-      },
-      {
-        id: 7, niveau: "info", type: "statut",
-        icon: "🔄",
-        message: "TAG-019 (Omar) — statut modifié : actif → malade. Historique mis à jour.",
-        animal: "TAG-019", date: "2026-03-27 16:00", source: "trg_historique_statut", traitee: true
-      },
-    ];
+    async function chargerAlertes() {
+      try {
+        const [resA, resS] = await Promise.all([
+          fetch("/alertes"),
+          fetch("/stats")
+        ]);
+        alertes = await resA.json();
+        const stats = await resS.json();
+        document.getElementById("count-traitees").textContent = stats.alertes_traitees || 0;
+        afficher();
+      } catch (err) {
+        console.error("Erreur:", err);
+        document.getElementById("alertes-container").innerHTML = '<div style="text-align:center;color:red;padding:40px;">Serveur deconnecte.</div>';
+      }
+    }
 
-    let filtreActif = "toutes";
-
-    // =============================================
-    //  AFFICHAGE
-    // =============================================
     function afficher() {
       const container = document.getElementById("alertes-container");
       container.innerHTML = "";
+      const counts = { critical: 0, warning: 0, info: 0 };
+      const labels = { critical: "URGENT / CRITIQUE", warning: "ATTENTION", info: "INFORMATION" };
 
-      const liste = alertes.filter(a => {
-        if (filtreActif === "toutes")   return !a.traitee;
-        if (filtreActif === "traitee")  return a.traitee;
-        return a.niveau === filtreActif && !a.traitee;
-      });
-
-      if (liste.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="icon">✅</div>
-            <p>Aucune alerte dans cette catégorie.</p>
-          </div>`;
-        return;
+      if (alertes.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">Aucune alerte active.</div>';
+      } else {
+        alertes.forEach(a => {
+          if (counts[a.niveau] !== undefined) counts[a.niveau]++;
+          const colors = { critical: "#E05C5C", warning: "#F0A030", info: "#5BA4F5" };
+          const col = colors[a.niveau] || "#ccc";
+          const card = document.createElement("div");
+          card.className = "alerte-card";
+          card.style.cssText = `--c: ${col}`;
+          card.innerHTML = `
+            <div class="alerte-card-body">
+              <span class="alerte-level-badge">${labels[a.niveau] || "ALERTE"}</span>
+              <div class="alerte-card-msg">${a.message}</div>
+              <div class="alerte-card-meta">
+                <span>[#] ID: ${a.id}</span>
+                <span>•</span>
+                <span>${new Date(a.date_creation).toLocaleString()}</span>
+              </div>
+            </div>
+            <button class="btn-traiter" onclick="traiter(${a.id})">Marquer comme traite</button>
+          `;
+          container.appendChild(card);
+        });
       }
 
-      liste.forEach((a, i) => {
-        const couleurs = {
-          critique:  { c: "#E05C5C", bg: "#FEF0F0" },
-          attention: { c: "#F0A030", bg: "#FEF7E8" },
-          info:      { c: "#5BA4F5", bg: "#EEF6FF" },
-        };
-        const col = couleurs[a.niveau] || couleurs.info;
-        const dateFormatee = new Date(a.date).toLocaleString("fr-FR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
-
-        const card = document.createElement("div");
-        card.className = `alerte-card${a.traitee ? " traitee" : ""}`;
-        card.style.cssText = `--c-card:${col.c}; --bg-card:${col.bg}; animation-delay:${i * 0.05}s`;
-        card.id = `alerte-${a.id}`;
-
-        card.innerHTML = `
-          <div class="alerte-card-icon" style="background:${col.bg}">${a.icon}</div>
-          <div class="alerte-card-body">
-            <div class="alerte-card-header">
-              <span class="alerte-card-type" style="background:${col.bg};color:${col.c}">${a.type.replace(/_/g," ")}</span>
-              <span class="alerte-card-niveau niveau-${a.niveau}">${a.niveau}</span>
-              ${a.traitee ? '<span style="font-size:11px;color:#4CAF82;font-weight:600">✅ Traitée</span>' : ""}
-            </div>
-            <div class="alerte-card-msg">${a.message}</div>
-            <div class="alerte-card-meta">
-              <span>🕐 ${dateFormatee}</span>
-              <span>⚙️ Source : <code style="font-size:10px">${a.source}</code></span>
-              ${a.animal ? `<span>🐄 ${a.animal}</span>` : ""}
-            </div>
-          </div>
-          <div class="alerte-card-actions">
-            <button class="btn-traiter" onclick="traiter(${a.id})" ${a.traitee ? "disabled" : ""}>
-              ${a.traitee ? "✅ Traitée" : "✓ Traiter"}
-            </button>
-            <button class="btn-supprimer" onclick="supprimer(${a.id})">🗑️</button>
-          </div>`;
-
-        container.appendChild(card);
-      });
-
-      mettreAJourCompteurs();
+      document.getElementById("count-critical").textContent = counts.critical;
+      document.getElementById("count-warning").textContent = counts.warning;
+      document.getElementById("count-info").textContent = counts.info;
+      document.getElementById("badge-nb").textContent = alertes.length;
     }
 
-    // =============================================
-    //  ACTIONS
-    // =============================================
- async function traiter(id) {
-  try {
-    await fetch(`${API_URL}/alertes/${id}/traiter`, { method: "POST" });
-  } catch { }
-  const a = alertes.find(x => x.id === id);
-  if (a) a.traitee = true;
-  const card = document.getElementById(`alerte-${id}`);
-  if (card) {
-    card.style.transition = "opacity 0.4s, transform 0.4s";
-    card.style.opacity = "0";
-    card.style.transform = "translateX(20px)";
-    setTimeout(() => afficher(), 400);
-  }
-}
-
-    function supprimer(id) {
-      const card = document.getElementById(`alerte-${id}`);
-      if (card) {
-        card.style.transition = "opacity 0.3s, transform 0.3s";
-        card.style.opacity = "0";
-        card.style.transform = "scale(0.95)";
-        setTimeout(() => {
-          alertes = alertes.filter(x => x.id !== id);
-          afficher();
-        }, 300);
-      }
+    async function traiter(id) {
+      try {
+        await fetch(`/api/alertes/${id}/traiter`, { method: "POST" });
+        alertes = alertes.filter(a => a.id !== id);
+        afficher();
+      } catch (err) { console.error("Erreur traitement:", err); }
     }
 
-    function toutTraiter() {
-      alertes.filter(a => !a.traitee).forEach(a => a.traitee = true);
-      afficher();
-    }
-
-    function toutSupprimer() {
-      alertes = alertes.filter(a => !a.traitee);
-      afficher();
-    }
-
-    function filtrer(val, btn) {
-      filtreActif = val;
-      document.querySelectorAll(".ftab").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      afficher();
-    }
-
-    // =============================================
-    //  COMPTEURS
-    // =============================================
-    function mettreAJourCompteurs() {
-      const nonTraitees = alertes.filter(a => !a.traitee);
-      const traitees    = alertes.filter(a => a.traitee);
-
-      const critique  = nonTraitees.filter(a => a.niveau === "critique").length;
-      const attention = nonTraitees.filter(a => a.niveau === "attention").length;
-      const info      = nonTraitees.filter(a => a.niveau === "info").length;
-
-      document.getElementById("count-critique").textContent  = critique;
-      document.getElementById("count-attention").textContent = attention;
-      document.getElementById("count-info").textContent      = info;
-      document.getElementById("count-traitee").textContent   = traitees.length;
-
-      document.getElementById("tab-count-toutes").textContent   = nonTraitees.length;
-      document.getElementById("tab-count-critique").textContent  = critique;
-      document.getElementById("tab-count-attention").textContent = attention;
-      document.getElementById("tab-count-info").textContent      = info;
-
-      // Badge sidebar
-      document.getElementById("badge-nb").textContent = nonTraitees.length;
-    }
-
-    // =============================================
-    //  INIT
-    // =============================================
-    document.getElementById("today-date").textContent = new Date().toLocaleDateString("fr-FR", {
-      weekday: "long", year: "numeric", month: "long", day: "numeric"
-    });
-
-    // Charger depuis l'API au démarrage
-async function init() {
-  try {
-    const r = await fetch(`${API_URL}/alertes`, { signal: AbortSignal.timeout(4000) });
-    if (!r.ok) throw new Error();
-    const data = await r.json();
-    const ICONES = { poids_faible:"🚨", vaccination:"💉", velage:"🍼", rapport:"📊", statut:"🔄" };
-    alertes = data.map(a => ({
-      id: a.id, niveau: a.niveau || "info", type: a.type || "info",
-      icon: ICONES[a.type] || "🔔", message: a.message,
-      animal: a.animal_id ? `Animal #${a.animal_id}` : null,
-      date: a.date_creation || new Date().toISOString(),
-      source: a.type || "système", traitee: false
-    }));
-  } catch { /* garde les données mock */ }
-  afficher();
-}
+    window.onload = chargerAlertes;
   </script>
-
 </body>
 </html>
