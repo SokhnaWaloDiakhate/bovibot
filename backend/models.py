@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Text, Enum, ForeignKey, Numeric
 from sqlalchemy.orm import relationship
-from database import Base
+from db_config import Base
 
 class User(Base):
     """ Modèle pour la table 'users' de la base de données. """

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
-from database import engine, Base, get_db
+from db_config import engine, Base, get_db
 import models
 from pydantic import BaseModel
 import os
