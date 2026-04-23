@@ -45,8 +45,11 @@ frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "f
 
 @app.get("/")
 def read_root():
-    """ Sert la page d'accueil du frontend. """
-    return FileResponse(os.path.join(frontend_path, "index.html"))
+    """ Sert la page d'accueil du frontend locale. """
+    index_path = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "API BoviBot en ligne"}
 
 @app.get("/animaux")
 @app.get("/api/animaux")
@@ -400,8 +403,9 @@ def get_reproduction(db: Session = Depends(get_db)):
     columns = result.keys()
     return [dict(zip(columns, row)) for row in result.fetchall()]
 
-# Monter le dossier frontend pour servir le CSS, JS et les images
-app.mount("/", StaticFiles(directory=frontend_path), name="frontend")
+# Monter le dossier frontend pour servir le CSS, JS et les images en local
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
